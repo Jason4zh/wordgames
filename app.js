@@ -1,6 +1,6 @@
 /* =====================================================================
  * app.js —— 四级词汇游乐场
- * 6 个游戏：Wordle / 字母填空 / 字母拼图 / 中英速配 / 记忆配对 / 听音辨词
+ * 6 个游戏：Wordle / 字母填空 / 字母拼图 / 单词连连看 / 记忆配对 / 下落消除
  * ===================================================================== */
 (function () {
   'use strict';
@@ -29,11 +29,17 @@
     learned: LS.get('wg:learned', []),
     wrong: LS.get('wg:wrong', {}),
     stars: LS.get('wg:stars', []),
-    settings: Object.assign({ study: true, autoSpeak: true, online: true, onlyWrong: false, level: 'mix' },
+    settings: Object.assign({ study: true, autoSpeak: true, online: true, onlyWrong: false, level: 'mix', light: false },
       LS.get('wg:settings', {}))
   };
 
   function saveSettings() { LS.set('wg:settings', STATE.settings); }
+  function applyTheme() {
+    var on = !!STATE.settings.light;
+    document.body.classList.toggle('light', on);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', on ? '#eef3fb' : '#0a1020');
+  }
   function saveWrong() { LS.set('wg:wrong', STATE.wrong); }
   function saveStars() { LS.set('wg:stars', STATE.stars); }
   function addScore(n) {
@@ -609,7 +615,8 @@
     });
     h += '</div>';
 
-    h += '<div class="hintline">' + s.w.length + ' 个字母 · 已试 ' + s.tries + ' 次 · 提示用了 ' + s.hints + ' 次</div>';
+    h += '<div class="hintline">' + s.w.length + ' 个字母 · 已试 ' + s.tries + ' 次 · 提示用了 ' + s.hints + ' 次' +
+      (s.hints > 0 ? ' <span style="color:#ffb545">·本轮不计钻石</span>' : '') + '</div>';
 
     if (!s.done) {
       h += '<div class="result"><button class="btn primary" data-act="check">检查</button>' +
@@ -617,6 +624,7 @@
         '<button class="btn ghost" data-act="new">换一个</button></div>';
     } else {
       h += '<div class="result"><span class="badge" style="color:#3ddc97">✅ 正确</span>' +
+        '<span class="badge">' + (s.hints > 0 ? '💎 +0（用过提示）' : '💎 +' + (s.gain || 0)) + '</span>' +
         '<button class="btn primary" data-act="new">下一个</button>' +
         '<button class="btn" data-act="card" data-w="' + e.w + '">看词卡</button></div>';
     }
@@ -664,7 +672,10 @@
     }
     s.done = true;
     var gain = Math.max(20, 70 + s.hideN * 10 - s.tries * 10 - s.hints * 20);
-    addScore(gain); markLearned(s.w); markRight(s.w);
+    if (s.hints > 0) gain = 0;   /* 本轮用过提示：不增加钻石 */
+    s.gain = gain;
+    if (gain > 0) addScore(gain);
+    markLearned(s.w); markRight(s.w);
     if (STATE.settings.autoSpeak) speak(s.w);
     fillRender();
     if (STATE.settings.study) setTimeout(function () { openCard(s.e); }, 380);
@@ -780,100 +791,87 @@
     anagramRender();
   }
 
-  /* =====================================================================
-   * 4. 中英速配（4 选 1）
+/* =====================================================================
+   * 4. 单词连连看（左英文 / 右中文，两列配对）
    * ===================================================================== */
-  var QZ = { s: null };
+  var LL = { s: null };
 
-  function quizNew() {
-    var pool = poolByLevel(4, 12);
-    var qs = [], used = {};
-    var guard = 0;
-    while (qs.length < 10 && guard++ < 400) {
+  function llNew() {
+    var pool = poolByLevel(4, 10);
+    var picked = [], seen = {}, guard = 0;
+    while (picked.length < 6 && guard++ < 400) {
       var e = pick(pool);
-      if (used[e.w]) continue;
-      used[e.w] = 1;
-      var dir = Math.random() < .55 ? 'e2z' : 'z2e';
-      var ds = distractors(e, pool, 3);
-      if (ds.length < 3) continue;
-      var opts = shuffle([e].concat(ds));
-      qs.push({ e: e, dir: dir, opts: opts, right: opts.indexOf(e), answered: false });
+      if (seen[e.w]) continue;
+      seen[e.w] = 1; picked.push(e);
     }
-    QZ.s = { qs: qs, i: 0, right: 0, done: false };
-    quizRender();
+    var left = picked.map(function (e) { return { e: e, w: e.w, done: false }; });
+    var right = picked.map(function (e) { return { e: e, zh: shortZh(e), done: false }; });
+    LL.s = {
+      left: shuffle(left), right: shuffle(right),
+      sel: -1, badL: -1, badR: -1, lock: false,
+      matched: 0, tries: 0, done: false
+    };
+    llRender();
   }
-  function quizRender() {
-    var s = QZ.s;
-    if (s.i >= s.qs.length) {
-      var acc = Math.round(s.right / s.qs.length * 100);
-      Stage.innerHTML = '<div class="panel"><div style="text-align:center;padding:16px 0">' +
-        '<div style="font-size:40px">' + (acc >= 80 ? '🏆' : acc >= 50 ? '👍' : '💪') + '</div>' +
-        '<h2 style="margin:8px 0">' + s.right + ' / ' + s.qs.length + ' 正确</h2>' +
-        '<div class="sub" style="color:#8fa0c0;font-size:12.5px">正确率 ' + acc + '%</div>' +
-        '<div class="result" style="margin-top:18px"><button class="btn primary" data-act="new">再来一轮</button>' +
-        '<button class="btn" data-act="tab" data-tab="book">看错词本</button></div>' +
-        '<div class="mini">错的词已记入错词本，可开启“只练错词”。</div></div></div>';
-      return;
-    }
-    var q = s.qs[s.i], e = q.e;
+  function llRender() {
+    var s = LL.s;
     var h = '<div class="panel">';
-    h += '<div class="rowbar"><h2>🎯 中英速配</h2><div class="sub">' + (s.i + 1) + ' / ' + s.qs.length + ' · 对 ' + s.right + '</div></div>';
-    h += '<div class="progress">';
-    s.qs.forEach(function (x, k) { h += '<i class="' + (k < s.i ? (x.ok ? 'on' : 'bad') : '') + '"></i>'; });
-    h += '</div>';
-
-    if (q.dir === 'e2z') {
-      h += '<div style="text-align:center;padding:10px 0 4px"><div style="font-size:28px;font-weight:800;letter-spacing:.5px">' + esc(e.w) + '</div>' +
-        '<div class="sub" style="color:#8fa0c0;font-size:11.5px;margin-top:4px">' + esc(WE.posLabel(e)) + '</div></div>';
-    } else {
-      h += '<div class="clue" style="text-align:center"><span class="pos">' + esc(WE.posShort(e)) + '</span>' +
-        '<span class="zh">' + esc(WE.senses(e).slice(0, 3).join('；')) + '</span></div>';
-    }
-
-    h += '<div class="opts">';
-    q.opts.forEach(function (o, k) {
-      var cls = 'opt';
-      if (q.answered) {
-        if (k === q.right) cls += ' right';
-        else if (k === q.pick) cls += ' wrong';
-      }
-      var txt = q.dir === 'e2z' ? WE.senses(o).slice(0, 2).join('；') : o.w;
-      h += '<button class="' + cls + '" data-act="opt" data-i="' + k + '" ' + (q.answered ? 'disabled' : '') + '>' +
-        '<span class="k">' + 'ABCD'[k] + '</span><span>' + esc(txt) + '</span></button>';
+    h += '<div class="rowbar"><h2>🔗 单词连连看</h2><div class="sub">已连 ' + (s.matched / 2) + '/6 · 出手 ' + s.tries + '</div></div>';
+    h += '<div class="mini" style="margin:0 0 8px">左列点一个英文，再点右列对应的中文，连对就消掉。</div>';
+    h += '<div class="llgrid"><div class="llcol">';
+    s.left.forEach(function (c, i) {
+      var cls = 'llcard';
+      if (c.done) cls += ' done';
+      if (s.sel === i) cls += ' sel';
+      if (s.badL === i) cls += ' bad';
+      h += '<button class="' + cls + '" data-act="ll" data-s="l" data-i="' + i + '">' + esc(c.w) + '</button>';
     });
-    h += '</div>';
-
-    if (q.answered) {
-      h += '<div class="result"><span class="badge">' + esc(e.w) + ' · ' + esc(WE.senses(e).slice(0, 2).join('；')) + '</span>' +
-        '<button class="btn primary" data-act="next">下一题</button></div>';
-      h += '<div class="result"><button class="btn small ghost" data-act="card" data-w="' + e.w + '">展开这个词的词卡</button></div>';
+    h += '</div><div class="llcol">';
+    s.right.forEach(function (c, i) {
+      var cls = 'llcard zh';
+      if (c.done) cls += ' done';
+      if (s.badR === i) cls += ' bad';
+      h += '<button class="' + cls + '" data-act="ll" data-s="r" data-i="' + i + '">' + esc(c.zh) + '</button>';
+    });
+    h += '</div></div>';
+    if (s.done) {
+      h += '<div class="result"><span class="badge" style="color:#3ddc97">✅ 全部连对</span>' +
+        '<button class="btn primary" data-act="new">再来一局</button></div>';
+    } else {
+      h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
     }
     h += '</div>';
     Stage.innerHTML = h;
   }
-  function quizOpt(k) {
-    var s = QZ.s, q = s.qs[s.i];
-    if (q.answered) return;
-    q.answered = true;
-    q.pick = k;
-    if (k === q.right) {
-      q.ok = true; s.right++;
-      addScore(12); markLearned(q.e.w); markRight(q.e.w);
-    } else {
-      q.ok = false;
-      STATE.streak = 0; syncTop();
-      markWrong(q.e.w);
+  function llClick(side, i) {
+    var s = LL.s;
+    if (s.lock || s.done) return;
+    if (side === 'l') {
+      if (s.left[i].done) return;
+      s.sel = (s.sel === i ? -1 : i);
+      llRender();
+      return;
     }
-    quizRender();
-  }
-  function quizNext() {
-    QZ.s.i++;
-    quizRender();
-    var q = QZ.s.qs[QZ.s.i - 1];
-    if (q && q.dir === 'z2e' && STATE.settings.study) {
-      // 只在拼错时弹卡，避免打断节奏
-      if (!q.ok) openCard(q.e);
+    var r = s.right[i];
+    if (r.done) return;
+    if (s.sel < 0) { toast('先在左边选一个英文'); return; }
+    var l = s.left[s.sel];
+    s.tries++;
+    if (l.e.w === r.e.w) {
+      l.done = true; r.done = true;
+      s.matched += 2; s.sel = -1;
+      addScore(14); markLearned(l.e.w); markRight(l.e.w);
+      if (s.matched === 12) { s.done = true; addScore(50); llRender(); return; }
+      llRender();
+      return;
     }
+    s.lock = true; s.badL = s.sel; s.badR = i;
+    llRender();
+    toast('不匹配，再想想');
+    setTimeout(function () {
+      s.lock = false; s.badL = -1; s.badR = -1; s.sel = -1;
+      llRender();
+    }, 430);
   }
 
   /* =====================================================================
@@ -909,12 +907,12 @@
     h += '<div class="mgrid">';
     s.cards.forEach(function (c, i) {
       var cls = 'mcard';
-      var show = c.done || c.open;
-      if (c.type === 'en' && show) cls += ' en';
-      if (c.done) cls += ' done';
+      if (c.type === 'en') cls += ' en';
+      if (c.done) cls += ' done open';
       else if (c.open) cls += ' open';
-      if (!show) cls += ' back';
-      h += '<button class="' + cls + '" data-act="mcard" data-i="' + i + '">' + (show ? esc(c.text) : '?') + '</button>';
+      h += '<button class="' + cls + '" data-act="mcard" data-i="' + i + '">' +
+        '<span class="mci"><span class="mcf mcb">?</span>' +
+        '<span class="mcf mcfr">' + esc(c.text) + '</span></span></button>';
     });
     h += '</div>';
     if (s.done) {
@@ -931,93 +929,198 @@
     if (s.lock || s.done) return;
     var c = s.cards[i];
     if (c.done || c.open) return;
+    var el = document.querySelector('.mcard[data-i="' + i + '"]');
     c.open = true;
-    if (s.first < 0) { s.first = i; matchRender(); return; }
+    if (el) el.classList.add('open');   /* 先加类触发翻转动画，不立即重绘 */
+    if (s.first < 0) { s.first = i; return; }
     var a = s.cards[s.first];
+    s.lock = true;
     s.moves++;
-    if (a.k === c.k) {
-      a.done = true; c.done = true;
-      s.matched += 2;
-      s.first = -1;
-      addScore(15);
-      markLearned(c.e.w); markRight(c.e.w);
-      if (s.matched === 12) {
-        s.done = true;
-        addScore(60);
+    var ok = (a.k === c.k);
+    setTimeout(function () {
+      if (ok) {
+        a.done = true; c.done = true;
+        s.matched += 2; s.first = -1; s.lock = false;
+        addScore(15); markLearned(c.e.w); markRight(c.e.w);
+        if (s.matched === 12) { s.done = true; addScore(60); }
         matchRender();
         return;
       }
-      matchRender(); return;
-    }
-    s.lock = true;
-    matchRender();
-    setTimeout(function () {
       a.open = false; c.open = false; s.first = -1; s.lock = false;
       matchRender();
-    }, 620);
+    }, ok ? 430 : 760);
   }
 
   /* =====================================================================
-   * 6. 听音辨词
+   * 6. 下落消除（单词/中文随机下落 + 底部选答案）
    * ===================================================================== */
-  var LSN = { s: null };
-  function listenNew() {
-    var pool = poolByLevel(4, 10);
-    var e = pick(pool);
-    var same = pool.filter(function (x) {
-      return x.w !== e.w && Math.abs(x.w.length - e.w.length) <= 1 && x.w[0] === e.w[0];
-    });
-    if (same.length < 3) {
-      same = pool.filter(function (x) { return x.w !== e.w && Math.abs(x.w.length - e.w.length) <= 2; });
-    }
-    var opts = shuffle([e].concat(shuffle(same).slice(0, 3)));
-    LSN.s = { e: e, opts: opts, right: opts.indexOf(e), picked: -1, done: false };
-    listenRender();
-    setTimeout(function () { speak(e.w); }, 260);
+  var FD = { s: null };
+
+  function fdStop() {
+    var s = FD.s;
+    if (!s) return;
+    s.running = false;
+    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
   }
-  function listenRender() {
-    var s = LSN.s, e = s.e, ok = !!window.speechSynthesis;
+  function fdNew() {
+    fdStop();
+    FD.s = {
+      pool: poolByLevel(3, 12), items: [], hearts: 5, sel: null, opts: [],
+      uid: 1, over: false, running: true, last: 0, spawnT: 0, right: 0
+    };
+    fdRender();
+    fdSpawn(); fdSpawn();
+    FD.s.raf = requestAnimationFrame(fdLoop);
+  }
+  function fdRender() {
     var h = '<div class="panel">';
-    h += '<div class="rowbar"><h2>🔈 听音辨词</h2><div class="sub">听发音选单词</div></div>';
-    if (!ok) h += '<div class="warnbox" style="margin-bottom:10px">这台设备的 WebView 不支持语音合成，可以改用「中英速配」。</div>';
-    h += '<div style="text-align:center;padding:6px 0 10px">' +
-      '<button class="btn primary" data-act="play" style="font-size:15px;padding:14px 26px">🔊 再听一遍</button>' +
-      '<div class="mini">' + (s.done ? esc(WE.posLabel(e)) + ' · ' + esc(WE.senses(e).join('；')) : '点击播放，选出发音对应的单词') + '</div></div>';
-
-    h += '<div class="opts">';
-    s.opts.forEach(function (o, k) {
-      var cls = 'opt';
-      if (s.done) {
-        if (k === s.right) cls += ' right';
-        else if (k === s.picked) cls += ' wrong';
-      }
-      h += '<button class="' + cls + '" data-act="lopt" data-i="' + k + '" ' + (s.done ? 'disabled' : '') + '>' +
-        '<span class="k">' + 'ABCD'[k] + '</span><span>' + esc(o.w) + '</span></button>';
-    });
-    h += '</div>';
-
-    if (s.done) {
-      h += '<div class="result"><span class="badge">' + (s.picked === s.right ? '✅ 正确' : '❌ 正确答案 ' + esc(s.opts[s.right].w)) + '</span>' +
-        '<button class="btn primary" data-act="new">下一题</button>' +
-        '<button class="btn" data-act="card" data-w="' + e.w + '">看词卡</button></div>';
-    } else {
-      h += '<div class="result"><button class="btn ghost" data-act="new">换一个</button></div>';
-    }
-    h += '<div class="mini">发音使用系统 TTS（美音优先），离线也能读。</div>';
+    h += '<div class="rowbar"><h2>🌠 下落消除</h2><div class="sub">❤️ <b id="fdHearts">5</b> · 答对 <b id="fdRight">0</b></div></div>';
+    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选对应答案。选对 +1 ❤️，选错 −2 ❤️，漏接 −1 ❤️，❤️ 归零结束。</div>';
+    h += '<div class="fdbox" id="fdBox"></div>';
+    h += '<div class="fdbank" id="fdBank"></div>';
+    h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
     h += '</div>';
     Stage.innerHTML = h;
+    fdHud(); fdBank();
   }
-  function listenOpt(k) {
-    var s = LSN.s;
-    if (s.done) return;
-    s.picked = k; s.done = true;
-    if (k === s.right) {
-      addScore(18); markLearned(s.e.w); markRight(s.e.w);
-    } else {
-      STATE.streak = 0; syncTop(); markWrong(s.e.w);
+  function fdHud() {
+    var s = FD.s;
+    if (!s) return;
+    if (s.hearts < 0) s.hearts = 0;
+    var a = document.getElementById('fdHearts'), b = document.getElementById('fdRight');
+    if (a) a.textContent = s.hearts;
+    if (b) b.textContent = s.right;
+  }
+  function fdBank() {
+    var s = FD.s, el = document.getElementById('fdBank');
+    if (!el) return;
+    if (!s.sel) { el.innerHTML = '<div class="fdtip">👆 先点一个下落的卡片</div>'; return; }
+    var q = s.sel.type === 'en' ? s.sel.e.w : shortZh(s.sel.e);
+    el.innerHTML = '<div class="fdtip">选出 <b>' + esc(q) + '</b> 的' +
+      (s.sel.type === 'en' ? '中文意思' : '英文单词') + '</div>' +
+      s.opts.map(function (o, k) {
+        return '<button class="fdopt" data-act="fdans" data-i="' + k + '">' + esc(o.txt) + '</button>';
+      }).join('');
+  }
+  function fdSpawn() {
+    var s = FD.s;
+    if (!s || !s.running || s.over) return;
+    var box = document.getElementById('fdBox');
+    if (!box || s.items.length >= 4) return;
+    var e = pick(s.pool);
+    var type = Math.random() < 0.5 ? 'en' : 'zh';
+    var el = document.createElement('button');
+    var it = {
+      u: s.uid++, e: e, type: type,
+      x: 3 + Math.random() * 50, y: -46,
+      v: 30 + Math.random() * 26,
+      rot: -18 + Math.random() * 36, el: el
+    };
+    el.className = 'fditem ' + type;
+    el.setAttribute('data-act', 'fdsel');
+    el.setAttribute('data-u', it.u);
+    el.textContent = type === 'en' ? e.w : shortZh(e);
+    el.style.left = it.x + '%';
+    el.style.top = it.y + 'px';
+    el.style.transform = 'rotate(' + it.rot.toFixed(1) + 'deg)';
+    box.appendChild(el);
+    s.items.push(it);
+  }
+  function fdLoop(ts) {
+    var s = FD.s;
+    if (!s || !s.running) return;
+    if (!s.last) s.last = ts;
+    var dt = Math.min(80, ts - s.last) / 1000;
+    s.last = ts;
+    var box = document.getElementById('fdBox');
+    if (!box) return;
+    var H = box.clientHeight;
+    for (var i = s.items.length - 1; i >= 0; i--) {
+      var it = s.items[i];
+      it.y += it.v * dt;
+      if (it.y > H - 6) { fdLose(it); continue; }
+      it.el.style.top = it.y.toFixed(1) + 'px';
     }
-    speak(s.opts[s.right].w);
-    listenRender();
+    s.spawnT += dt;
+    if (s.spawnT > 1.25) { s.spawnT = 0; fdSpawn(); }
+    if (s.running) s.raf = requestAnimationFrame(fdLoop);
+  }
+  function fdDrop(it) {
+    if (it.el && it.el.parentNode) it.el.parentNode.removeChild(it.el);
+    var i = FD.s.items.indexOf(it);
+    if (i >= 0) FD.s.items.splice(i, 1);
+  }
+  function fdLose(it) {
+    var s = FD.s;
+    fdDrop(it);
+    s.hearts--;
+    if (s.sel === it) { s.sel = null; s.opts = []; }
+    fdHud(); fdBank();
+    if (s.hearts <= 0) { fdOver(); return; }
+    toast('漏接一个，−1 ❤️');
+  }
+  function fdPick(u) {
+    var s = FD.s;
+    if (!s || s.over) return;
+    var it = null;
+    s.items.forEach(function (x) { if (x.u === u) it = x; });
+    if (!it) return;
+    s.sel = it;
+    s.items.forEach(function (x) { x.el.classList.toggle('sel', x === it); });
+    fdMakeOpts(it);
+  }
+  function fdMakeOpts(it) {
+    var s = FD.s;
+    var others = [], seen = {}, guard = 0;
+    seen[it.e.w] = 1;
+    while (others.length < 3 && guard++ < 300) {
+      var e2 = pick(s.pool);
+      if (seen[e2.w]) continue;
+      seen[e2.w] = 1; others.push(e2);
+    }
+    s.opts = shuffle([it.e].concat(others)).map(function (e) {
+      return { e: e, txt: it.type === 'en' ? shortZh(e) : e.w, ok: e.w === it.e.w };
+    });
+    fdBank();
+  }
+  function fdAns(k) {
+    var s = FD.s;
+    if (!s || s.over || !s.sel) return;
+    var o = s.opts[k];
+    if (!o) return;
+    var it = s.sel;
+    if (o.ok) {
+      s.hearts++; s.right++;
+      addScore(12); markLearned(it.e.w); markRight(it.e.w);
+      fdDrop(it);
+      s.sel = null; s.opts = [];
+      fdHud(); fdBank();
+      toast('✅ 消除 +1 ❤️');
+      return;
+    }
+    s.hearts -= 2;
+    var btns = document.querySelectorAll('#fdBank .fdopt');
+    if (btns[k]) btns[k].classList.add('bad');
+    fdHud();
+    toast('❌ 选错 −2 ❤️');
+    if (s.hearts <= 0) { fdOver(); return; }
+    setTimeout(function () {
+      if (FD.s !== s || s.over) return;
+      s.sel = null; s.opts = [];
+      s.items.forEach(function (x) { x.el.classList.remove('sel'); });
+      fdBank();
+    }, 420);
+  }
+  function fdOver() {
+    var s = FD.s;
+    s.over = true; s.running = false;
+    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
+    var box = document.getElementById('fdBox');
+    if (box) box.innerHTML = '<div class="fdover"><div class="fdheart">💔</div><h3>❤️ 用完了</h3>' +
+      '<div class="sub">本轮消除 ' + s.right + ' 个</div>' +
+      '<button class="btn primary" data-act="new" style="margin-top:10px">再来一局</button></div>';
+    var bank = document.getElementById('fdBank');
+    if (bank) bank.innerHTML = '';
   }
 
   /* =====================================================================
@@ -1072,6 +1175,7 @@
     h += sw('study', '答案后展开词卡', '展示释义、词形、搭配、词族、例句、考点');
     h += sw('autoSpeak', '自动发音', '看到/答对单词时用系统 TTS 朗读');
     h += sw('online', '联网补词', '查 dictionaryapi.dev 的真实例句与英文释义');
+    h += sw('light', '亮色主题', '浅色背景，白天与户外更清晰');
     h += '<div class="setrow"><div class="lbl">难度<small>影响出题词长与 Wordle 字母数</small></div>' +
       '<div class="seg">' +
       ['easy:基础', 'mid:进阶', 'hard:挑战', 'mix:混合'].map(function (x) {
@@ -1096,25 +1200,27 @@
     { id: 'wordle', icon: '🟩', name: '拼词' },
     { id: 'fill', icon: '🔤', name: '填空' },
     { id: 'anagram', icon: '🧩', name: '拼图' },
-    { id: 'quiz', icon: '🎯', name: '速配' },
+    { id: 'll', icon: '🔗', name: '连连看' },
     { id: 'match', icon: '🃏', name: '配对' },
-    { id: 'listen', icon: '🔈', name: '听音' },
+    { id: 'fd', icon: '🌠', name: '下落' },
     { id: 'book', icon: '📚', name: '词本' }
   ];
+
   function renderTabs() {
     TabsEl.innerHTML = TABS.map(function (t) {
       return '<button class="tab ' + (STATE.game === t.id ? 'on' : '') + '" data-act="tab" data-tab="' + t.id + '"><i>' + t.icon + '</i>' + t.name + '</button>';
     }).join('');
   }
   function go(id) {
+    fdStop();
     STATE.game = id;
     renderTabs();
     if (id === 'wordle') wordleNew();
     else if (id === 'fill') fillNew();
     else if (id === 'anagram') anagramNew();
-    else if (id === 'quiz') quizNew();
+    else if (id === 'll') llNew();
     else if (id === 'match') matchNew();
-    else if (id === 'listen') listenNew();
+    else if (id === 'fd') fdNew();
     else if (id === 'book') renderBook();
   }
 
@@ -1143,6 +1249,7 @@
       case 'tog':
         STATE.settings[d.k] = !STATE.settings[d.k];
         saveSettings();
+        if (d.k === 'light') applyTheme();
         if (d.k === 'onlyWrong') { closeSheet(); go(STATE.game); }
         else { t.classList.toggle('on'); }
         break;
@@ -1178,11 +1285,10 @@
         if (STATE.game === 'wordle') wordleNew();
         else if (STATE.game === 'fill') fillNew();
         else if (STATE.game === 'anagram') anagramNew();
-        else if (STATE.game === 'quiz') quizNew();
+        else if (STATE.game === 'll') llNew();
         else if (STATE.game === 'match') matchNew();
-        else if (STATE.game === 'listen') listenNew();
+        else if (STATE.game === 'fd') fdNew();
         break;
-
       /* --- fill --- */
       case 'lbank': fillClickBank(+d.i); break;
       case 'slot': fillClickSlot(+d.i); break;
@@ -1195,16 +1301,18 @@
       case 'clear':
         AN.s.ans = []; AN.s.pool.forEach(function (x) { x.used = false; }); anagramRender(); break;
 
-      /* --- quiz --- */
-      case 'opt': quizOpt(+d.i); break;
-      case 'next': quizNext(); break;
+
 
       /* --- match --- */
       case 'mcard': matchClick(+d.i); break;
+      /* --- 连连看 --- */
+      case 'll': llClick(d.s, +d.i); break;
 
-      /* --- listen --- */
-      case 'play': speak(LSN.s.e.w); break;
-      case 'lopt': listenOpt(+d.i); break;
+      /* --- 下落消除 --- */
+      case 'fdsel': fdPick(+d.u); break;
+      case 'fdans': fdAns(+d.i); break;
+
+
     }
   });
 
@@ -1217,6 +1325,7 @@
   });
 
   /* ---------------- 启动 ---------------- */
+  applyTheme();
   syncTop();
   renderTabs();
   go('wordle');
