@@ -115,11 +115,9 @@ b,strong{font-weight:700}
 .wscell.got{background:#15382a;border-color:#2f8f66;color:var(--mint);opacity:.92}
 .wscell.bad{border-color:var(--red);background:#301319;color:var(--red);animation:shake .4s}
 .wslist{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.wschip{display:flex;flex-direction:column;padding:5px 9px;border-radius:10px;background:#16203a;border:1.5px solid #2b3a58;font-size:12px;line-height:1.2}
-.wschip b{font-weight:800;letter-spacing:.4px}
-.wschip small{font-size:10px;color:var(--dim);margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wschip.got{background:#122e24;border-color:#2f8f66;color:var(--mint)}
-.wschip.got small{color:#4f8f76;text-decoration:line-through}
+.wschip{display:inline-flex;align-items:center;padding:7px 13px;border-radius:999px;background:#16203a;border:1.5px solid #2b3a58;color:var(--txt);font-size:12.5px;font-weight:800;letter-spacing:.6px;font-family:inherit;line-height:1;cursor:pointer;transition:transform .12s,border-color .15s}
+.wschip:active{transform:scale(.95)}
+.wschip.got{background:#122e24;border-color:#2f8f66;color:var(--mint);text-decoration:line-through;opacity:.85}
 
 /* ---------- 下落消除 · 难度统计 ---------- */
 .fdstat{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--dim);margin:0 0 6px}
@@ -293,3 +291,43 @@ body.light .btn.warn{background:#fdecee;border-color:#f0c2c9;color:#c53a4e}
 body.light .dzh{color:#8a5a10}
 body.light .dlist li{color:#2c3b53}
 body.light .dsrc{color:#8b9ab5;border-top-color:#e8eef7}
+
+/* ---------- 最高成绩徽标 / 列表 ---------- */
+.rowbar{flex-wrap:wrap}
+.bestchip{margin-left:auto;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;
+  border-radius:999px;background:#152036;border:1px solid #2b3a58;font-size:10.5px;
+  color:var(--dim);white-space:nowrap}
+.bestchip b{color:var(--mint);font-size:11px}
+.bestchip i{font-style:normal;opacity:.8}
+.bestlist{margin-top:8px;border-top:1px solid #1f2b44}
+.bestrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1a2438;font-size:12px}
+.bestrow span{flex:1;color:var(--dim)}
+.bestrow b{color:var(--mint);font-size:12.5px}
+.bestrow i{font-style:normal;font-size:10.5px;color:var(--dim);width:44px;text-align:right}
+/* ---------- 下落消除 · 选错词卡 ---------- */
+.fdwc{padding:12px 13px;border-radius:16px;border:1.5px solid #3b4d70;
+  background:linear-gradient(160deg,#182136,#141d31);box-shadow:0 8px 24px -14px #000}
+.fdwc-h{display:flex;align-items:center;gap:8px}
+.fdwc-h b{font-size:21px;letter-spacing:.8px;color:var(--txt)}
+.fdwc-h .icon{margin-left:auto}
+.fdwc-zh{margin-top:7px;font-size:13px;line-height:1.55;color:var(--txt)}
+.fdwc-zh i{font-style:normal;font-size:10.5px;color:#a98bff;margin-right:5px}
+.fdwc-q{margin-top:7px;font-size:11px;color:var(--dim)}
+/* ---------- 亮色覆盖 ---------- */
+body.light .bestchip{background:#eef3fc;border-color:#d7e1f0;color:#7d8cab}
+body.light .bestchip b{color:#0b7a55}
+body.light .bestlist{border-top-color:#e8eef7}
+body.light .bestrow{border-bottom-color:#e8eef7}
+body.light .bestrow span{color:#7d8cab}
+body.light .bestrow b{color:#0b7a55}
+body.light .fdwc{background:linear-gradient(160deg,#ffffff,#f4f8ff);border-color:#d3deef;
+  box-shadow:0 8px 22px -16px rgba(20,40,80,.3)}
+body.light .fdwc-h b{color:#17233a}
+body.light .fdwc-zh{color:#2c3b53}
+body.light .fdwc-zh i{color:#7a5bd0}
+body.light .fdwc-q{color:#8b9ab5}
+/* ---------- 找词 · 16x16 大盘 ---------- */
+.wsgrid.ws16{gap:2px;margin-top:8px}
+.wsgrid.ws16 .wscell{font-size:9.5px;border-radius:5px;border-width:1px;font-weight:700}
+.wsgrid.ws16 .wscell.sel{transform:scale(1.12)}
+body.light .wsgrid.ws16 .wscell{border-color:#d3deef}
