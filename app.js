@@ -1,6 +1,6 @@
 /* =====================================================================
  * app.js —— 四级词汇游乐场
- * 6 个游戏：Wordle / 字母填空 / 字母拼图 / 单词连连看 / 记忆配对 / 下落消除
+ * 6 个游戏：Wordle / 字母填空 / 字母拼图 / 单词找词 / 记忆配对 / 下落消除
  * ===================================================================== */
 (function () {
   'use strict';
@@ -791,90 +791,150 @@
     anagramRender();
   }
 
-/* =====================================================================
-   * 4. 单词连连看（左英文 / 右中文，两列配对）
+  /* =====================================================================
+   * 4. 单词找词（字母棋盘，单词可横 / 竖 / 斜 45° 任意方向）
    * ===================================================================== */
   var LL = { s: null };
+  var WS_DIRS = [[0, 1], [1, 0], [1, 1], [1, -1], [0, -1], [-1, 0], [-1, -1], [-1, 1]];
+
+  function wsBuild(words, N) {
+    var g = [], i, j;
+    for (i = 0; i < N; i++) { g.push([]); for (j = 0; j < N; j++) g[i].push(''); }
+    var placed = [];
+    words.forEach(function (e) {
+      var w = String(e.w).toLowerCase();
+      for (var att = 0; att < 260; att++) {
+        var d = WS_DIRS[rnd(8)];
+        var r0 = rnd(N), c0 = rnd(N);
+        var r1 = r0 + d[0] * (w.length - 1), c1 = c0 + d[1] * (w.length - 1);
+        if (r1 < 0 || r1 >= N || c1 < 0 || c1 >= N) continue;
+        var ok = true;
+        for (var k = 0; k < w.length; k++) {
+          var ch = g[r0 + d[0] * k][c0 + d[1] * k];
+          if (ch && ch !== w[k]) { ok = false; break; }
+        }
+        if (!ok) continue;
+        for (var m = 0; m < w.length; m++) g[r0 + d[0] * m][c0 + d[1] * m] = w[m];
+        placed.push(e);
+        break;
+      }
+    });
+    var bag = '';
+    words.forEach(function (e) { bag += String(e.w).toLowerCase(); });
+    for (i = 0; i < N; i++) for (j = 0; j < N; j++) {
+      if (g[i][j]) continue;
+      g[i][j] = (bag && Math.random() < 0.7) ? bag[rnd(bag.length)] : String.fromCharCode(97 + rnd(26));
+    }
+    return { g: g, placed: placed };
+  }
 
   function llNew() {
-    var pool = poolByLevel(4, 10);
-    var picked = [], seen = {}, guard = 0;
-    while (picked.length < 6 && guard++ < 400) {
-      var e = pick(pool);
-      if (seen[e.w]) continue;
-      seen[e.w] = 1; picked.push(e);
+    var pool = poolByLevel(3, 7);
+    var cand = pool.filter(function (e) { return /^[a-z]{3,7}$/.test(e.w); });
+    if (cand.length < 12) cand = D.filter(function (e) { return /^[a-z]{3,7}$/.test(e.w); });
+    var words = [], seen = {}, guard = 0;
+    while (words.length < 6 && guard++ < 900) {
+      var e = pick(cand);
+      if (!e || seen[e.w]) continue;
+      seen[e.w] = 1; words.push(e);
     }
-    var left = picked.map(function (e) { return { e: e, w: e.w, done: false }; });
-    var right = picked.map(function (e) { return { e: e, zh: shortZh(e), done: false }; });
+    var N = 8, best = null;
+    for (var t = 0; t < 8; t++) {
+      var bd = wsBuild(words, N);
+      if (!best || bd.placed.length > best.placed.length) best = bd;
+      if (best.placed.length === words.length) break;
+    }
+    var picked = best.placed.slice(0, 5);
     LL.s = {
-      left: shuffle(left), right: shuffle(right),
-      sel: -1, badL: -1, badR: -1, lock: false,
-      matched: 0, tries: 0, done: false
+      N: N, grid: best.g,
+      words: picked.map(function (e) {
+        return { e: e, w: String(e.w).toLowerCase(), zh: shortZh(e), found: false, cells: null };
+      }),
+      start: -1, bad: [], foundCount: 0, tries: 0, done: false
     };
     llRender();
   }
+
   function llRender() {
-    var s = LL.s;
+    var s = LL.s, N = s.N, i, j, idx, cls;
+    var got = {};
+    s.words.forEach(function (w) {
+      if (w.found && w.cells) w.cells.forEach(function (c) { got[c] = 1; });
+    });
     var h = '<div class="panel">';
-    h += '<div class="rowbar"><h2>🔗 单词连连看</h2><div class="sub">已连 ' + (s.matched / 2) + '/6 · 出手 ' + s.tries + '</div></div>';
-    h += '<div class="mini" style="margin:0 0 8px">左列点一个英文，再点右列对应的中文，连对就消掉。</div>';
-    h += '<div class="llgrid"><div class="llcol">';
-    s.left.forEach(function (c, i) {
-      var cls = 'llcard';
-      if (c.done) cls += ' done';
-      if (s.sel === i) cls += ' sel';
-      if (s.badL === i) cls += ' bad';
-      h += '<button class="' + cls + '" data-act="ll" data-s="l" data-i="' + i + '">' + esc(c.w) + '</button>';
+    h += '<div class="rowbar"><h2>🔍 单词找词</h2><div class="sub">找到 ' + s.foundCount + '/' + s.words.length + ' · 出手 ' + s.tries + '</div></div>';
+    h += '<div class="mini" style="margin:0 0 7px">在字母棋盘里找出列表中的单词：先点起点格，再点终点格。单词可横、竖、斜 45° 排列，也可能首尾反向。</div>';
+    h += '<div class="wsgrid" style="grid-template-columns:repeat(' + N + ',1fr)">';
+    for (i = 0; i < N; i++) for (j = 0; j < N; j++) {
+      idx = i * N + j;
+      cls = 'wscell';
+      if (got[idx]) cls += ' got';
+      if (s.start === idx) cls += ' sel';
+      if (s.bad.indexOf(idx) >= 0) cls += ' bad';
+      h += '<button class="' + cls + '" data-act="ll" data-i="' + idx + '">' + esc(s.grid[i][j]) + '</button>';
+    }
+    h += '</div>';
+    h += '<div class="wslist">';
+    s.words.forEach(function (w) {
+      h += '<span class="wschip' + (w.found ? ' got' : '') + '"><b>' + esc(w.w) + '</b><small>' + esc(w.zh) + '</small></span>';
     });
-    h += '</div><div class="llcol">';
-    s.right.forEach(function (c, i) {
-      var cls = 'llcard zh';
-      if (c.done) cls += ' done';
-      if (s.badR === i) cls += ' bad';
-      h += '<button class="' + cls + '" data-act="ll" data-s="r" data-i="' + i + '">' + esc(c.zh) + '</button>';
-    });
-    h += '</div></div>';
+    h += '</div>';
     if (s.done) {
-      h += '<div class="result"><span class="badge" style="color:#3ddc97">✅ 全部连对</span>' +
+      h += '<div class="result"><span class="badge" style="color:#3ddc97">✅ 全部找到</span>' +
         '<button class="btn primary" data-act="new">再来一局</button></div>';
     } else {
-      h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
+      h += '<div class="result"><button class="btn ghost" data-act="new">换一盘</button></div>';
     }
     h += '</div>';
     Stage.innerHTML = h;
   }
-  function llClick(side, i) {
-    var s = LL.s;
-    if (s.lock || s.done) return;
-    if (side === 'l') {
-      if (s.left[i].done) return;
-      s.sel = (s.sel === i ? -1 : i);
-      llRender();
-      return;
+
+  function llClick(i) {
+    var s = LL.s, N = s.N;
+    if (s.done) return;
+    if (s.start < 0) { s.start = i; s.bad = []; llRender(); return; }
+    if (s.start === i) { s.start = -1; llRender(); return; }
+    var r0 = Math.floor(s.start / N), c0 = s.start % N;
+    var r1 = Math.floor(i / N), c1 = i % N;
+    var dr = r1 - r0, dc = c1 - c0;
+    if (!(dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc))) {
+      toast('只能横、竖或斜 45°');
+      s.start = i; llRender(); return;
     }
-    var r = s.right[i];
-    if (r.done) return;
-    if (s.sel < 0) { toast('先在左边选一个英文'); return; }
-    var l = s.left[s.sel];
+    var len = Math.max(Math.abs(dr), Math.abs(dc)) + 1;
+    var sr = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
+    var sc = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
+    var cells = [], str = '';
+    for (var k = 0; k < len; k++) {
+      var r = r0 + sr * k, c = c0 + sc * k;
+      cells.push(r * N + c);
+      str += s.grid[r][c];
+    }
     s.tries++;
-    if (l.e.w === r.e.w) {
-      l.done = true; r.done = true;
-      s.matched += 2; s.sel = -1;
-      addScore(14); markLearned(l.e.w); markRight(l.e.w);
-      if (s.matched === 12) { s.done = true; addScore(50); llRender(); return; }
-      llRender();
+    var rev = str.split('').reverse().join('');
+    var hitW = null;
+    s.words.forEach(function (w) {
+      if (!w.found && (w.w === str || w.w === rev)) hitW = w;
+    });
+    s.start = -1;
+    if (hitW) {
+      hitW.found = true; hitW.cells = cells;
+      s.foundCount++; s.bad = [];
+      addScore(18); markLearned(hitW.e.w); markRight(hitW.e.w);
+      if (s.foundCount === s.words.length) { s.done = true; addScore(60); llRender(); toast('🎉 全部找到'); return; }
+      llRender(); toast('✅ ' + hitW.w + ' 找到了');
       return;
     }
-    s.lock = true; s.badL = s.sel; s.badR = i;
+    s.bad = cells;
     llRender();
-    toast('不匹配，再想想');
+    toast('这条线上不是列表里的词');
     setTimeout(function () {
-      s.lock = false; s.badL = -1; s.badR = -1; s.sel = -1;
-      llRender();
-    }, 430);
+      if (LL.s !== s) return;
+      s.bad = []; llRender();
+    }, 420);
   }
 
-  /* =====================================================================
+/* =====================================================================
    * 5. 记忆配对
    * ===================================================================== */
   var MC = { s: null };
@@ -951,10 +1011,19 @@
     }, ok ? 430 : 760);
   }
 
-  /* =====================================================================
-   * 6. 下落消除（单词/中文随机下落 + 底部选答案）
+    /* =====================================================================
+   * 6. 下落消除（自定义规则 · 难度评估影响钻石）
+   *    · 选对 +1 ❤️，按当前难度得钻石（简单 6 / 普通 12 / 困难 22，连击有加成）
+   *    · 选错、漏接按当前难度扣 ❤️；❤️ 归零结束
+   *    · 难度按最近 3 题正确率自动升降，直接决定钻石单价
    * ===================================================================== */
   var FD = { s: null };
+  var FD_DIFF = [
+    { name: '简单', hearts: 6, v: [22, 32], gap: 1.70, max: 3, opts: 3, miss: 1, wrong: 1, gem: 6 },
+    { name: '普通', hearts: 5, v: [32, 46], gap: 1.25, max: 4, opts: 4, miss: 1, wrong: 2, gem: 12 },
+    { name: '困难', hearts: 4, v: [44, 62], gap: 0.95, max: 5, opts: 4, miss: 2, wrong: 3, gem: 22 }
+  ];
+  function fdCfg() { return FD_DIFF[FD.s ? FD.s.diff : 1]; }
 
   function fdStop() {
     var s = FD.s;
@@ -965,8 +1034,9 @@
   function fdNew() {
     fdStop();
     FD.s = {
-      pool: poolByLevel(3, 12), items: [], hearts: 5, sel: null, opts: [],
-      uid: 1, over: false, running: true, last: 0, spawnT: 0, right: 0
+      pool: poolByLevel(3, 12), items: [], diff: 1, hearts: FD_DIFF[1].hearts,
+      sel: null, opts: [], uid: 1, over: false, running: true, last: 0, spawnT: 0,
+      right: 0, answered: 0, correct: 0, combo: 0, bestCombo: 0, hist: [], gem: 0
     };
     fdRender();
     fdSpawn(); fdSpawn();
@@ -974,8 +1044,12 @@
   }
   function fdRender() {
     var h = '<div class="panel">';
-    h += '<div class="rowbar"><h2>🌠 下落消除</h2><div class="sub">❤️ <b id="fdHearts">5</b> · 答对 <b id="fdRight">0</b></div></div>';
-    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选对应答案。选对 +1 ❤️，选错 −2 ❤️，漏接 −1 ❤️，❤️ 归零结束。</div>';
+    h += '<div class="rowbar"><h2>🌠 下落消除</h2><div class="sub">' +
+      '❤️ <b id="fdHearts">5</b> · 难度 <b id="fdDiff">普通</b> · 答对 <b id="fdRight">0</b> · 💎 <b id="fdGem">0</b></div></div>';
+    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。选对 +1❤️ 并按难度拿钻石（简单 6 / 普通 12 / 困难 22，连击最高再 +50%）；选错、漏接按难度扣心（简单 1 / 普通 1~2 / 困难 2~3）。连对 3 题难度上升，连错 3 题难度下降，钻石单价随之变化。</div>';
+    h += '<div class="fdstat"><span>正确率 <b id="fdAcc">—</b></span>' +
+      '<span>钻石单价 <b id="fdUnit">12</b>/题</span>' +
+      '<span>连击 <b id="fdCombo">0</b></span></div>';
     h += '<div class="fdbox" id="fdBox"></div>';
     h += '<div class="fdbank" id="fdBank"></div>';
     h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
@@ -987,9 +1061,15 @@
     var s = FD.s;
     if (!s) return;
     if (s.hearts < 0) s.hearts = 0;
-    var a = document.getElementById('fdHearts'), b = document.getElementById('fdRight');
-    if (a) a.textContent = s.hearts;
-    if (b) b.textContent = s.right;
+    var c = FD_DIFF[s.diff];
+    var a = document.getElementById('fdHearts'); if (a) a.textContent = s.hearts;
+    var d = document.getElementById('fdDiff'); if (d) d.textContent = c.name;
+    var b = document.getElementById('fdRight'); if (b) b.textContent = s.right;
+    var g = document.getElementById('fdGem'); if (g) g.textContent = s.gem;
+    var u = document.getElementById('fdUnit'); if (u) u.textContent = c.gem;
+    var cb = document.getElementById('fdCombo'); if (cb) cb.textContent = s.combo;
+    var ac = document.getElementById('fdAcc');
+    if (ac) ac.textContent = s.answered ? Math.round(s.correct / s.answered * 100) + '%' : '—';
   }
   function fdBank() {
     var s = FD.s, el = document.getElementById('fdBank');
@@ -1006,14 +1086,16 @@
     var s = FD.s;
     if (!s || !s.running || s.over) return;
     var box = document.getElementById('fdBox');
-    if (!box || s.items.length >= 4) return;
+    if (!box) return;
+    var c = FD_DIFF[s.diff];
+    if (s.items.length >= c.max) return;
     var e = pick(s.pool);
     var type = Math.random() < 0.5 ? 'en' : 'zh';
     var el = document.createElement('button');
     var it = {
       u: s.uid++, e: e, type: type,
       x: 3 + Math.random() * 50, y: -46,
-      v: 30 + Math.random() * 26,
+      v: c.v[0] + Math.random() * (c.v[1] - c.v[0]),
       rot: -18 + Math.random() * 36, el: el
     };
     el.className = 'fditem ' + type;
@@ -1042,7 +1124,7 @@
       it.el.style.top = it.y.toFixed(1) + 'px';
     }
     s.spawnT += dt;
-    if (s.spawnT > 1.25) { s.spawnT = 0; fdSpawn(); }
+    if (s.spawnT > FD_DIFF[s.diff].gap) { s.spawnT = 0; fdSpawn(); }
     if (s.running) s.raf = requestAnimationFrame(fdLoop);
   }
   function fdDrop(it) {
@@ -1052,12 +1134,15 @@
   }
   function fdLose(it) {
     var s = FD.s;
+    var c = FD_DIFF[s.diff];
     fdDrop(it);
-    s.hearts--;
+    s.hearts -= c.miss;
+    s.answered++; s.combo = 0; s.hist.push(false);
     if (s.sel === it) { s.sel = null; s.opts = []; }
     fdHud(); fdBank();
     if (s.hearts <= 0) { fdOver(); return; }
-    toast('漏接一个，−1 ❤️');
+    toast('漏接一个，−' + c.miss + ' ❤️');
+    fdEvalDiff();
   }
   function fdPick(u) {
     var s = FD.s;
@@ -1071,9 +1156,10 @@
   }
   function fdMakeOpts(it) {
     var s = FD.s;
+    var c = FD_DIFF[s.diff];
     var others = [], seen = {}, guard = 0;
     seen[it.e.w] = 1;
-    while (others.length < 3 && guard++ < 300) {
+    while (others.length < c.opts - 1 && guard++ < 300) {
       var e2 = pick(s.pool);
       if (seen[e2.w]) continue;
       seen[e2.w] = 1; others.push(e2);
@@ -1083,26 +1169,50 @@
     });
     fdBank();
   }
+  function fdEvalDiff() {
+    var s = FD.s;
+    if (!s || s.over) return;
+    if (!s.answered || s.answered % 3 !== 0) return;
+    var last3 = s.hist.slice(-3), ok = 0;
+    last3.forEach(function (x) { if (x) ok++; });
+    if (ok === 3 && s.diff < 2) {
+      s.diff++;
+      fdHud();
+      toast('🔥 难度评估 → ' + FD_DIFF[s.diff].name + '，钻石 ' + FD_DIFF[s.diff].gem + '/题');
+    } else if (ok <= 1 && s.diff > 0) {
+      s.diff--;
+      fdHud();
+      toast('🌿 难度评估 → ' + FD_DIFF[s.diff].name + '，钻石 ' + FD_DIFF[s.diff].gem + '/题');
+    }
+  }
   function fdAns(k) {
     var s = FD.s;
     if (!s || s.over || !s.sel) return;
     var o = s.opts[k];
     if (!o) return;
     var it = s.sel;
+    var c = FD_DIFF[s.diff];
     if (o.ok) {
-      s.hearts++; s.right++;
-      addScore(12); markLearned(it.e.w); markRight(it.e.w);
+      s.hearts++; s.right++; s.answered++; s.correct++;
+      s.combo++;
+      if (s.combo > s.bestCombo) s.bestCombo = s.combo;
+      s.hist.push(true);
+      var gain = Math.round(c.gem * (1 + Math.min(s.combo - 1, 5) * 0.1));
+      s.gem += gain;
+      addScore(gain); markLearned(it.e.w); markRight(it.e.w);
       fdDrop(it);
       s.sel = null; s.opts = [];
       fdHud(); fdBank();
-      toast('✅ 消除 +1 ❤️');
+      toast('✅ 消除 +1❤️ 💎+' + gain + (s.combo > 1 ? ' · 连击 ×' + s.combo : ''));
+      fdEvalDiff();
       return;
     }
-    s.hearts -= 2;
+    s.hearts -= c.wrong;
+    s.answered++; s.combo = 0; s.hist.push(false);
     var btns = document.querySelectorAll('#fdBank .fdopt');
     if (btns[k]) btns[k].classList.add('bad');
     fdHud();
-    toast('❌ 选错 −2 ❤️');
+    toast('❌ 选错 −' + c.wrong + ' ❤️');
     if (s.hearts <= 0) { fdOver(); return; }
     setTimeout(function () {
       if (FD.s !== s || s.over) return;
@@ -1110,6 +1220,7 @@
       s.items.forEach(function (x) { x.el.classList.remove('sel'); });
       fdBank();
     }, 420);
+    fdEvalDiff();
   }
   function fdOver() {
     var s = FD.s;
@@ -1117,13 +1228,15 @@
     if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
     var box = document.getElementById('fdBox');
     if (box) box.innerHTML = '<div class="fdover"><div class="fdheart">💔</div><h3>❤️ 用完了</h3>' +
-      '<div class="sub">本轮消除 ' + s.right + ' 个</div>' +
+      '<div class="sub">本轮消除 ' + s.right + ' 个 · 💎 +' + s.gem + ' · 最高难度 ' +
+      FD_DIFF[s.diff].name + '</div>' +
+      '<div class="sub">正确率 ' + (s.answered ? Math.round(s.correct / s.answered * 100) : 0) + '% · 最高连击 ' + s.bestCombo + '</div>' +
       '<button class="btn primary" data-act="new" style="margin-top:10px">再来一局</button></div>';
     var bank = document.getElementById('fdBank');
     if (bank) bank.innerHTML = '';
   }
 
-  /* =====================================================================
+/* =====================================================================
    * 词本
    * ===================================================================== */
   var bookTab = 'wrong';
@@ -1200,7 +1313,7 @@
     { id: 'wordle', icon: '🟩', name: '拼词' },
     { id: 'fill', icon: '🔤', name: '填空' },
     { id: 'anagram', icon: '🧩', name: '拼图' },
-    { id: 'll', icon: '🔗', name: '连连看' },
+    { id: 'll', icon: '🔍', name: '找词' },
     { id: 'match', icon: '🃏', name: '配对' },
     { id: 'fd', icon: '🌠', name: '下落' },
     { id: 'book', icon: '📚', name: '词本' }
@@ -1305,8 +1418,8 @@
 
       /* --- match --- */
       case 'mcard': matchClick(+d.i); break;
-      /* --- 连连看 --- */
-      case 'll': llClick(d.s, +d.i); break;
+      /* --- 单词找词 --- */
+      case 'll': llClick(+d.i); break;
 
       /* --- 下落消除 --- */
       case 'fdsel': fdPick(+d.u); break;

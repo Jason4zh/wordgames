@@ -108,15 +108,22 @@ b,strong{font-weight:700}
 .mcard.en .mcfr{font-weight:800;font-size:12.5px;letter-spacing:.2px}
 .mcard.done .mcfr{background:#12301f;border-color:#2f8f66;color:var(--mint);opacity:.9}
 
-/* ---------- 单词连连看 ---------- */
-.llgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
-.llcol{display:flex;flex-direction:column;gap:8px}
-.llcard{min-height:46px;border-radius:12px;background:#16203a;border:1.5px solid #2b3a58;font-size:14px;font-weight:700;padding:6px 8px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;transition:background .18s,transform .12s,opacity .25s}
-.llcard.zh{font-weight:400;font-size:12.5px}
-.llcard.sel{background:#1b3a2c;border-color:var(--mint);color:var(--mint)}
-.llcard.done{opacity:.28;background:#122e24;border-color:#2f8f66;color:var(--mint);pointer-events:none}
-.llcard.bad{border-color:var(--red);background:#301319;animation:shake .4s}
+/* ---------- 单词找词（字母棋盘） ---------- */
+.wsgrid{display:grid;gap:4px;margin-top:6px}
+.wscell{aspect-ratio:1;padding:0;border-radius:10px;background:#16203a;border:1.5px solid #2b3a58;color:var(--txt);font-size:14px;font-weight:800;text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,transform .12s}
+.wscell.sel{background:#1b3a2c;border-color:var(--mint);color:var(--mint);transform:scale(1.04)}
+.wscell.got{background:#15382a;border-color:#2f8f66;color:var(--mint);opacity:.92}
+.wscell.bad{border-color:var(--red);background:#301319;color:var(--red);animation:shake .4s}
+.wslist{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.wschip{display:flex;flex-direction:column;padding:5px 9px;border-radius:10px;background:#16203a;border:1.5px solid #2b3a58;font-size:12px;line-height:1.2}
+.wschip b{font-weight:800;letter-spacing:.4px}
+.wschip small{font-size:10px;color:var(--dim);margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wschip.got{background:#122e24;border-color:#2f8f66;color:var(--mint)}
+.wschip.got small{color:#4f8f76;text-decoration:line-through}
 
+/* ---------- 下落消除 · 难度统计 ---------- */
+.fdstat{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--dim);margin:0 0 6px}
+.fdstat b{color:var(--txt)}
 /* ---------- 下落消除 ---------- */
 .fdbox{position:relative;height:46vh;min-height:250px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(180deg,#0f1728,#131d31);overflow:hidden;margin:6px 0 10px}
 .fditem{position:absolute;max-width:44%;padding:6px 10px;border-radius:10px;font-size:13px;font-weight:700;line-height:1.2;background:#1e2a44;border:1.5px solid #3a4a6b;color:var(--txt);box-shadow:0 4px 12px -6px #000;transform-origin:50% 50%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -228,10 +235,13 @@ body.light .ptile{background:#efe9fb;border-color:#d5c8f0;color:#4b2f8a}
 body.light .opt{background:#f6f9ff;border-color:#d3deef}
 body.light .opt.right{background:#e4fbf1;border-color:#3fbb8b}
 body.light .opt.wrong{background:#fdecee;border-color:#ee8a97}
-body.light .llcard{background:#f6f9ff;border-color:#d3deef;color:#17233a}
-body.light .llcard.sel{background:#e4fbf1;border-color:#0f9f6e;color:#0b7a55}
-body.light .llcard.done{background:#e4fbf1;border-color:#8fd9bd;color:#0b7a55}
-body.light .llcard.bad{background:#fdecee;border-color:#d94a5f}
+body.light .wscell{background:#f6f9ff;border-color:#d3deef;color:#17233a}
+body.light .wscell.sel{background:#e4fbf1;border-color:#0f9f6e;color:#0b7a55}
+body.light .wscell.got{background:#e4fbf1;border-color:#8fd9bd;color:#0b7a55}
+body.light .wscell.bad{background:#fdecee;border-color:#d94a5f;color:#d94a5f}
+body.light .wschip{background:#f6f9ff;border-color:#d3deef;color:#17233a}
+body.light .wschip.got{background:#e4fbf1;border-color:#8fd9bd;color:#0b7a55}
+body.light .fdstat b{color:#17233a}
 body.light .mcb{background:linear-gradient(160deg,#dfe8f7,#eef3fb);color:#9aa9c2}
 body.light .mcfr{background:#f4f8ff;color:#17233a}
 body.light .mcard.done .mcfr{background:#e4fbf1;border-color:#7fd3b2;color:#0b7a55}
