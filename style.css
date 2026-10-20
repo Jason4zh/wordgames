@@ -211,6 +211,17 @@ b,strong{font-weight:700}
 .dpills{display:flex;flex-wrap:wrap;gap:0}
 .dsrc{margin-top:9px;font-size:10.5px;color:#5f7192;border-top:1px dashed #24314c;padding-top:7px}
 
+/* ---------- 下落消除 · 规则栏 / 自定义输入 ---------- */
+.fdrule{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;margin:0 0 8px;font-size:11px;color:var(--dim);line-height:1.5}
+.fdrule .btn.small{padding:6px 10px;font-size:11px}
+.numrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #1f2b44}
+.numrow .lbl{flex:1;font-size:13px;color:var(--txt);line-height:1.35}
+.numrow .lbl small{display:block;font-size:10.5px;color:var(--dim);margin-top:2px}
+.numrow input{width:84px;text-align:center;background:#111a2b;border:1.5px solid #2b3a58;border-radius:9px;color:var(--txt);padding:7px 6px;font-size:13px;font-weight:700;font-family:inherit}
+.numrow em{font-style:normal;font-size:11px;color:var(--dim);width:34px;text-align:left}
+body.light .numrow{border-bottom-color:#e8eef7}
+body.light .numrow input{background:#f6f9ff;border-color:#d3deef;color:#17233a}
+
 /* ================= 亮色主题（设置里开启） ================= */
 body.light{
   --bg:#eef3fb; --bg2:#ffffff; --card:#ffffff; --card2:#eaf0fa; --line:#d6e0f0;

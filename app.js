@@ -1012,18 +1012,60 @@
   }
 
     /* =====================================================================
-   * 6. 下落消除（自定义规则 · 难度评估影响钻石）
-   *    · 选对 +1 ❤️，按当前难度得钻石（简单 6 / 普通 12 / 困难 22，连击有加成）
-   *    · 选错、漏接按当前难度扣 ❤️；❤️ 归零结束
-   *    · 难度按最近 3 题正确率自动升降，直接决定钻石单价
+   * 6. 下落消除（规则全自定义 · 难度评估决定钻石）
+   *    · 所有数值由玩家填写：初始 ❤️、答对回心、选错/漏接扣心、
+   *      下落速度、生成间隔、同屏上限、选项个数、钻石基数
+   *    · 难度评估：按填写参数（并参考实际正确率）算出系数，
+   *      直接乘在每题钻石上 —— 填得越狠，钻石越多
    * ===================================================================== */
   var FD = { s: null };
-  var FD_DIFF = [
-    { name: '简单', hearts: 6, v: [22, 32], gap: 1.70, max: 3, opts: 3, miss: 1, wrong: 1, gem: 6 },
-    { name: '普通', hearts: 5, v: [32, 46], gap: 1.25, max: 4, opts: 4, miss: 1, wrong: 2, gem: 12 },
-    { name: '困难', hearts: 4, v: [44, 62], gap: 0.95, max: 5, opts: 4, miss: 2, wrong: 3, gem: 22 }
-  ];
-  function fdCfg() { return FD_DIFF[FD.s ? FD.s.diff : 1]; }
+  var FD_KEYS = ['hearts', 'gain', 'wrong', 'miss', 'vmin', 'vmax', 'gap', 'max', 'opts', 'gem'];
+  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 32, vmax: 46, gap: 1.25, max: 4, opts: 4, gem: 12 };
+  var FD_RULE = (function () {
+    var save = LS.get('wg:fdr', null), r = {}, i, k, v;
+    for (i = 0; i < FD_KEYS.length; i++) { k = FD_KEYS[i]; r[k] = FD_DEF[k]; }
+    if (save) {
+      for (i = 0; i < FD_KEYS.length; i++) {
+        k = FD_KEYS[i];
+        v = parseFloat(save[k]);
+        if (isFinite(v) && v >= 0) r[k] = v;
+      }
+    }
+    return r;
+  })();
+
+  function fdCloneRules() {
+    var r = {}, i;
+    for (i = 0; i < FD_KEYS.length; i++) r[FD_KEYS[i]] = FD_RULE[FD_KEYS[i]];
+    return r;
+  }
+  function fdNum(v, lo, hi, dft) {
+    v = parseFloat(v);
+    if (!isFinite(v)) v = dft;
+    return Math.max(lo, Math.min(hi, v));
+  }
+  /* 难度评估：把玩家填的规则折算成一个钻石系数（默认规则 = 1.00） */
+  function fdFac(s) {
+    var r = FD_RULE;
+    var mid = (r.vmin + r.vmax) / 2;
+    var arr = [mid / 39, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts];
+    var sum = 0;
+    arr.forEach(function (v) { sum += Math.max(0.5, Math.min(2, v)); });
+    var f = sum / arr.length;
+    if (s && s.answered >= 5) {
+      var acc = s.correct / s.answered;
+      if (acc >= 0.8) f *= 1.15;
+      else if (acc < 0.5) f *= 0.9;
+    }
+    return Math.max(0.5, Math.min(2.5, Math.round(f * 100) / 100));
+  }
+  function fdUnit() { return Math.max(1, Math.round(FD_RULE.gem * fdFac(FD.s))); }
+  function fdRuleText() {
+    var r = FD_RULE;
+    return '❤️' + r.hearts + ' · 对+' + r.gain + ' · 错−' + r.wrong + ' · 漏−' + r.miss +
+      ' · 速' + r.vmin + '~' + r.vmax + ' · ' + r.gap + 's/张 · 同屏' + r.max +
+      ' · 选项' + r.opts + ' · 💎' + r.gem;
+  }
 
   function fdStop() {
     var s = FD.s;
@@ -1034,8 +1076,8 @@
   function fdNew() {
     fdStop();
     FD.s = {
-      pool: poolByLevel(3, 12), items: [], diff: 1, hearts: FD_DIFF[1].hearts,
-      sel: null, opts: [], uid: 1, over: false, running: true, last: 0, spawnT: 0,
+      pool: poolByLevel(3, 12), items: [], hearts: FD_RULE.hearts, sel: null, opts: [],
+      uid: 1, over: false, running: true, last: 0, spawnT: 0,
       right: 0, answered: 0, correct: 0, combo: 0, bestCombo: 0, hist: [], gem: 0
     };
     fdRender();
@@ -1045,11 +1087,14 @@
   function fdRender() {
     var h = '<div class="panel">';
     h += '<div class="rowbar"><h2>🌠 下落消除</h2><div class="sub">' +
-      '❤️ <b id="fdHearts">5</b> · 难度 <b id="fdDiff">普通</b> · 答对 <b id="fdRight">0</b> · 💎 <b id="fdGem">0</b></div></div>';
-    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。选对 +1❤️ 并按难度拿钻石（简单 6 / 普通 12 / 困难 22，连击最高再 +50%）；选错、漏接按难度扣心（简单 1 / 普通 1~2 / 困难 2~3）。连对 3 题难度上升，连错 3 题难度下降，钻石单价随之变化。</div>';
-    h += '<div class="fdstat"><span>正确率 <b id="fdAcc">—</b></span>' +
-      '<span>钻石单价 <b id="fdUnit">12</b>/题</span>' +
+      '❤️ <b id="fdHearts">5</b> · 答对 <b id="fdRight">0</b> · 💎 <b id="fdGem">0</b></div></div>';
+    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。规则数值全部可自己填；难度评估按你填的参数（并参考实际正确率）折算系数，乘在每题钻石上。</div>';
+    h += '<div class="fdstat"><span>评估系数 <b id="fdFac">×1.00</b></span>' +
+      '<span>每题钻石 <b id="fdUnit">12</b></span>' +
+      '<span>正确率 <b id="fdAcc">—</b></span>' +
       '<span>连击 <b id="fdCombo">0</b></span></div>';
+    h += '<div class="fdrule"><span id="fdRuleTxt">' + esc(fdRuleText()) + '</span>' +
+      '<button class="btn small" data-act="fdrule">⚙️ 自定义规则</button></div>';
     h += '<div class="fdbox" id="fdBox"></div>';
     h += '<div class="fdbank" id="fdBank"></div>';
     h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
@@ -1061,15 +1106,16 @@
     var s = FD.s;
     if (!s) return;
     if (s.hearts < 0) s.hearts = 0;
-    var c = FD_DIFF[s.diff];
+    var f = fdFac(s);
     var a = document.getElementById('fdHearts'); if (a) a.textContent = s.hearts;
-    var d = document.getElementById('fdDiff'); if (d) d.textContent = c.name;
     var b = document.getElementById('fdRight'); if (b) b.textContent = s.right;
     var g = document.getElementById('fdGem'); if (g) g.textContent = s.gem;
-    var u = document.getElementById('fdUnit'); if (u) u.textContent = c.gem;
+    var fa = document.getElementById('fdFac'); if (fa) fa.textContent = '×' + f.toFixed(2);
+    var u = document.getElementById('fdUnit'); if (u) u.textContent = Math.max(1, Math.round(FD_RULE.gem * f));
     var cb = document.getElementById('fdCombo'); if (cb) cb.textContent = s.combo;
     var ac = document.getElementById('fdAcc');
     if (ac) ac.textContent = s.answered ? Math.round(s.correct / s.answered * 100) + '%' : '—';
+    var rt = document.getElementById('fdRuleTxt'); if (rt) rt.textContent = fdRuleText();
   }
   function fdBank() {
     var s = FD.s, el = document.getElementById('fdBank');
@@ -1087,15 +1133,16 @@
     if (!s || !s.running || s.over) return;
     var box = document.getElementById('fdBox');
     if (!box) return;
-    var c = FD_DIFF[s.diff];
-    if (s.items.length >= c.max) return;
+    var r = FD_RULE;
+    if (s.items.length >= r.max) return;
     var e = pick(s.pool);
     var type = Math.random() < 0.5 ? 'en' : 'zh';
     var el = document.createElement('button');
+    var lo = Math.min(r.vmin, r.vmax), hi = Math.max(r.vmin, r.vmax);
     var it = {
       u: s.uid++, e: e, type: type,
       x: 3 + Math.random() * 50, y: -46,
-      v: c.v[0] + Math.random() * (c.v[1] - c.v[0]),
+      v: lo + Math.random() * (hi - lo),
       rot: -18 + Math.random() * 36, el: el
     };
     el.className = 'fditem ' + type;
@@ -1124,7 +1171,7 @@
       it.el.style.top = it.y.toFixed(1) + 'px';
     }
     s.spawnT += dt;
-    if (s.spawnT > FD_DIFF[s.diff].gap) { s.spawnT = 0; fdSpawn(); }
+    if (s.spawnT > FD_RULE.gap) { s.spawnT = 0; fdSpawn(); }
     if (s.running) s.raf = requestAnimationFrame(fdLoop);
   }
   function fdDrop(it) {
@@ -1134,15 +1181,13 @@
   }
   function fdLose(it) {
     var s = FD.s;
-    var c = FD_DIFF[s.diff];
     fdDrop(it);
-    s.hearts -= c.miss;
+    s.hearts -= FD_RULE.miss;
     s.answered++; s.combo = 0; s.hist.push(false);
     if (s.sel === it) { s.sel = null; s.opts = []; }
     fdHud(); fdBank();
     if (s.hearts <= 0) { fdOver(); return; }
-    toast('漏接一个，−' + c.miss + ' ❤️');
-    fdEvalDiff();
+    toast('漏接一个，−' + FD_RULE.miss + ' ❤️');
   }
   function fdPick(u) {
     var s = FD.s;
@@ -1156,10 +1201,10 @@
   }
   function fdMakeOpts(it) {
     var s = FD.s;
-    var c = FD_DIFF[s.diff];
+    var need = Math.max(2, Math.round(FD_RULE.opts)) - 1;
     var others = [], seen = {}, guard = 0;
     seen[it.e.w] = 1;
-    while (others.length < c.opts - 1 && guard++ < 300) {
+    while (others.length < need && guard++ < 400) {
       var e2 = pick(s.pool);
       if (seen[e2.w]) continue;
       seen[e2.w] = 1; others.push(e2);
@@ -1169,50 +1214,33 @@
     });
     fdBank();
   }
-  function fdEvalDiff() {
-    var s = FD.s;
-    if (!s || s.over) return;
-    if (!s.answered || s.answered % 3 !== 0) return;
-    var last3 = s.hist.slice(-3), ok = 0;
-    last3.forEach(function (x) { if (x) ok++; });
-    if (ok === 3 && s.diff < 2) {
-      s.diff++;
-      fdHud();
-      toast('🔥 难度评估 → ' + FD_DIFF[s.diff].name + '，钻石 ' + FD_DIFF[s.diff].gem + '/题');
-    } else if (ok <= 1 && s.diff > 0) {
-      s.diff--;
-      fdHud();
-      toast('🌿 难度评估 → ' + FD_DIFF[s.diff].name + '，钻石 ' + FD_DIFF[s.diff].gem + '/题');
-    }
-  }
   function fdAns(k) {
     var s = FD.s;
     if (!s || s.over || !s.sel) return;
     var o = s.opts[k];
     if (!o) return;
     var it = s.sel;
-    var c = FD_DIFF[s.diff];
+    var r = FD_RULE;
     if (o.ok) {
-      s.hearts++; s.right++; s.answered++; s.correct++;
+      s.hearts += r.gain; s.right++; s.answered++; s.correct++;
       s.combo++;
       if (s.combo > s.bestCombo) s.bestCombo = s.combo;
       s.hist.push(true);
-      var gain = Math.round(c.gem * (1 + Math.min(s.combo - 1, 5) * 0.1));
+      var gain = Math.max(1, Math.round(r.gem * fdFac(s) * (1 + Math.min(s.combo - 1, 5) * 0.1)));
       s.gem += gain;
       addScore(gain); markLearned(it.e.w); markRight(it.e.w);
       fdDrop(it);
       s.sel = null; s.opts = [];
       fdHud(); fdBank();
-      toast('✅ 消除 +1❤️ 💎+' + gain + (s.combo > 1 ? ' · 连击 ×' + s.combo : ''));
-      fdEvalDiff();
+      toast('✅ 消除 +' + r.gain + '❤️ 💎+' + gain + (s.combo > 1 ? ' · 连击 ×' + s.combo : ''));
       return;
     }
-    s.hearts -= c.wrong;
+    s.hearts -= r.wrong;
     s.answered++; s.combo = 0; s.hist.push(false);
     var btns = document.querySelectorAll('#fdBank .fdopt');
     if (btns[k]) btns[k].classList.add('bad');
     fdHud();
-    toast('❌ 选错 −' + c.wrong + ' ❤️');
+    toast('❌ 选错 −' + r.wrong + ' ❤️');
     if (s.hearts <= 0) { fdOver(); return; }
     setTimeout(function () {
       if (FD.s !== s || s.over) return;
@@ -1220,7 +1248,6 @@
       s.items.forEach(function (x) { x.el.classList.remove('sel'); });
       fdBank();
     }, 420);
-    fdEvalDiff();
   }
   function fdOver() {
     var s = FD.s;
@@ -1228,14 +1255,65 @@
     if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
     var box = document.getElementById('fdBox');
     if (box) box.innerHTML = '<div class="fdover"><div class="fdheart">💔</div><h3>❤️ 用完了</h3>' +
-      '<div class="sub">本轮消除 ' + s.right + ' 个 · 💎 +' + s.gem + ' · 最高难度 ' +
-      FD_DIFF[s.diff].name + '</div>' +
+      '<div class="sub">本轮消除 ' + s.right + ' 个 · 💎 +' + s.gem + ' · 评估 ×' + fdFac(s).toFixed(2) + '</div>' +
       '<div class="sub">正确率 ' + (s.answered ? Math.round(s.correct / s.answered * 100) : 0) + '% · 最高连击 ' + s.bestCombo + '</div>' +
       '<button class="btn primary" data-act="new" style="margin-top:10px">再来一局</button></div>';
     var bank = document.getElementById('fdBank');
     if (bank) bank.innerHTML = '';
   }
 
+  /* 自定义规则面板：所有数值手填 */
+  function fdRulesOpen() {
+    var r = FD_RULE;
+    function row(k, label, step, unit, hint) {
+      return '<div class="numrow"><div class="lbl">' + label +
+        (hint ? '<small>' + hint + '</small>' : '') + '</div>' +
+        '<input type="number" data-k="' + k + '" value="' + r[k] + '" step="' + step + '" inputmode="decimal">' +
+        (unit ? '<em>' + unit + '</em>' : '') + '</div>';
+    }
+    var h = '<div class="sheet-in">';
+    h += '<div class="rowbar"><h2>⚙️ 下落消除 · 自定义规则</h2><button class="icon" data-act="close">✕</button></div>';
+    h += '<div class="mini">所有数值都可以自己填。难度评估会用这些数值算一个系数（默认规则 = ×1.00），系数越大每题钻石越多。</div>';
+    h += row('hearts', '初始 ❤️', '1', '颗', '0 心直接结束，建议 1~20');
+    h += row('gain', '答对回心', '1', '颗', '可填 0，只靠钻石');
+    h += row('wrong', '选错扣心', '1', '颗', '0~10');
+    h += row('miss', '漏接扣心', '1', '颗', '0~10');
+    h += row('vmin', '下落最快速度', '1', 'px/s', '数值越大越难');
+    h += row('vmax', '下落最慢速度', '1', 'px/s', '小值大值写反会自动纠正');
+    h += row('gap', '生成间隔', '0.05', '秒', '0.2~5');
+    h += row('max', '同屏上限', '1', '张', '1~10');
+    h += row('opts', '选项个数', '1', '个', '2~6');
+    h += row('gem', '钻石基数', '1', '💎', '最终钻石 = 基数 × 评估系数');
+    h += '<div class="fdstat" style="margin-top:10px"><span>当前评估系数 <b>' + fdFac(null).toFixed(2) + '</b></span>' +
+      '<span>每题预计 <b>' + Math.max(1, Math.round(r.gem * fdFac(null))) + '</b> 💎</span></div>';
+    h += '<div class="result"><button class="btn" data-act="fddef">恢复默认</button>' +
+      '<button class="btn primary" data-act="fdsave">保存并开始</button></div>';
+    h += '</div>';
+    Sheet.innerHTML = h;
+    Sheet.classList.add('on');
+  }
+  function fdReadRules() {
+    var r = fdCloneRules();
+    var ins = document.querySelectorAll('.sheet-in input[data-k]');
+    for (var i = 0; i < ins.length; i++) {
+      var k = ins[i].getAttribute('data-k');
+      if (FD_KEYS.indexOf(k) < 0) continue;
+      var v = parseFloat(ins[i].value);
+      if (isFinite(v)) r[k] = v;
+    }
+    r.hearts = fdNum(r.hearts, 1, 20, FD_DEF.hearts);
+    r.gain = fdNum(r.gain, 0, 10, FD_DEF.gain);
+    r.wrong = fdNum(r.wrong, 0, 10, FD_DEF.wrong);
+    r.miss = fdNum(r.miss, 0, 10, FD_DEF.miss);
+    r.vmin = fdNum(r.vmin, 5, 200, FD_DEF.vmin);
+    r.vmax = fdNum(r.vmax, 5, 200, FD_DEF.vmax);
+    if (r.vmin > r.vmax) { var t = r.vmin; r.vmin = r.vmax; r.vmax = t; }
+    r.gap = fdNum(r.gap, 0.2, 5, FD_DEF.gap);
+    r.max = Math.round(fdNum(r.max, 1, 10, FD_DEF.max));
+    r.opts = Math.round(fdNum(r.opts, 2, 6, FD_DEF.opts));
+    r.gem = fdNum(r.gem, 0, 200, FD_DEF.gem);
+    return r;
+  }
 /* =====================================================================
    * 词本
    * ===================================================================== */
@@ -1424,6 +1502,21 @@
       /* --- 下落消除 --- */
       case 'fdsel': fdPick(+d.u); break;
       case 'fdans': fdAns(+d.i); break;
+      case 'fdrule': fdRulesOpen(); break;
+      case 'fdsave':
+        FD_RULE = fdReadRules();
+        LS.set('wg:fdr', FD_RULE);
+        closeSheet(); fdNew(); toast('规则已保存');
+        break;
+      case 'fddef':
+        (function () {
+          var r = {}, i;
+          for (i = 0; i < FD_KEYS.length; i++) r[FD_KEYS[i]] = FD_DEF[FD_KEYS[i]];
+          FD_RULE = r;
+        })();
+        LS.set('wg:fdr', FD_RULE);
+        fdRulesOpen(); toast('已恢复默认');
+        break;
 
 
     }
