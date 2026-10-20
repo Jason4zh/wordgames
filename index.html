@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a1020">
+<title>四级词汇游乐场</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand">
+      <span class="logo">🎯</span>
+      <div>
+        <b>四级词汇游乐场</b>
+        <small>Wordle · 填空 · 拼图 · 速配 · 配对 · 听音</small>
+      </div>
+    </div>
+    <div class="stats">
+      <span class="chip" id="chipScore">0 分</span>
+      <span class="chip" id="chipStreak">🔥 0</span>
+      <button class="icon" data-act="settings" aria-label="设置">⚙️</button>
+    </div>
+  </div>
+
+  <div id="stage"></div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="sheet" id="sheet"></div>
+  <div class="toast" id="toast"></div>
+
+<script src="words.js"></script>
+<!-- 可选：有 dict.js（离线词典数据包）时自动优先使用；没有也不报错 -->
+<script src="dict.js"></script>
+<!-- 可选：若你有能转发并回 Access-Control-Allow-Origin 的 CORS 代理，
+     取消下一行注释并填入代理地址，即可启用「有道词典 · 柯林斯双解」这一层（数据最全）。
+     例：window.WG_PROXY = 'https://你的代理/?url=';
+     不填时默认走 Wiktionary（英文释义/真实例句/同义词）+ mymemory（例句中译）。 -->
+<!-- <script>window.WG_PROXY = '';</script> -->
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
