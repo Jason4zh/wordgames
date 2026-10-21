@@ -673,8 +673,12 @@
     roundStart();
     var e = pick(poolByLevel(5, 10));
     var w = e.w, n = w.length;
+    /* 首尾字母固定显示，只挖中间的字母 */
+    var inner = [];
+    for (var q = 1; q < n - 1; q++) inner.push(q);
     var hideN = Math.max(1, Math.min(4, Math.round(n * 0.35)));
-    var idx = shuffle(range(n)).slice(0, hideN).sort(function (a, b) { return a - b; });
+    hideN = Math.max(0, Math.min(hideN, inner.length));
+    var idx = shuffle(inner).slice(0, hideN).sort(function (a, b) { return a - b; });
     var hidden = {};
     idx.forEach(function (i) { hidden[i] = 1; });
     var need = idx.map(function (i) { return w[i]; });
@@ -695,7 +699,7 @@
     var h = '<div class="panel">';
     h += '<div class="rowbar"><h2>🔤 字母填空</h2><div class="sub">挖空 ' + s.hideN + ' 个字母</div></div>';
     h += '<div class="clue"><span class="pos">' + esc(WE.posShort(e)) + '</span><span class="zh">' + esc(sn.slice(0, 3).join('；')) + '</span>';
-    h += '<div class="tip">点下面字母 bank 填进空格；点已填的空格可退回。首尾字母已给出。</div></div>';
+    h += '<div class="tip">点下面字母 bank 填进空格；点已填的空格可退回。首尾字母固定显示，只挖中间的字母。</div></div>';
 
     h += '<div class="slots">';
     s.slots.forEach(function (sl, i) {
@@ -1143,8 +1147,8 @@
    *      直接乘在每题钻石上 —— 填得越狠，钻石越多
    * ===================================================================== */
   var FD = { s: null };
-  var FD_KEYS = ['hearts', 'gain', 'wrong', 'miss', 'vmin', 'vmax', 'gap', 'max', 'opts', 'gem', 'bspd', 'bheart'];
-  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 32, vmax: 46, gap: 1.25, max: 4, opts: 4, gem: 12, bspd: 3, bheart: 1 };
+  var FD_KEYS = ['hearts', 'gain', 'wrong', 'miss', 'vmin', 'vmax', 'gap', 'max', 'opts', 'gem', 'bspd', 'bheart', 'bonus'];
+  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 32, vmax: 46, gap: 1.25, max: 4, opts: 4, gem: 12, bspd: 3, bheart: 1, bonus: 1 };
   var FD_RULE = (function () {
     var save = LS.get('wg:fdr', null), r = {}, i, k, v;
     for (i = 0; i < FD_KEYS.length; i++) { k = FD_KEYS[i]; r[k] = FD_DEF[k]; }
@@ -1152,7 +1156,7 @@
       for (i = 0; i < FD_KEYS.length; i++) {
         k = FD_KEYS[i];
         v = parseFloat(save[k]);
-        if (isFinite(v) && v >= 0) r[k] = v;
+        if (isFinite(v)) r[k] = v;
       }
     }
     return r;
@@ -1176,7 +1180,7 @@
   function fdFac(s) {
     var r = FD_RULE;
     var mid = (r.vmin + r.vmax) / 2;
-    var arr = [mid / 39, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts, Math.max(1, r.bspd) / 3];
+    var arr = [mid / 39, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts, (r.bonus >= 1 ? r.bspd : 3) / 3];
     var sum = 0;
     arr.forEach(function (v) { sum += Math.max(0.5, Math.min(2, v)); });
     var f = sum / arr.length;
@@ -1191,7 +1195,7 @@
     var r = FD_RULE;
     return '❤️' + r.hearts + ' · 对+' + r.gain + ' · 错−' + r.wrong + ' · 漏−' + r.miss +
       ' · 速' + r.vmin + '~' + r.vmax + ' · ' + r.gap + 's/张 · 同屏' + r.max +
-      ' · 选项' + r.opts + ' · 💎' + r.gem + ' · ✨×' + r.bspd + ' +' + r.bheart + '❤️';
+      ' · 选项' + r.opts + ' · 💎' + r.gem + (r.bonus >= 1 ? ' · ✨×' + r.bspd + ' +' + r.bheart + '❤️' : ' · ✨关');
   }
 
   function fdStop() {
@@ -1216,7 +1220,9 @@
     var h = '<div class="panel">';
     h += '<div class="rowbar"><h2>🌠 下落消除</h2><div class="sub">' +
       '❤️ <b id="fdHearts">5</b> · ⏱ <b id="fdTime">0:00</b> · 答对 <b id="fdRight">0</b> · 💎 <b id="fdGem">0</b></div></div>';
-    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。规则数值全部可自己填。<b>金色闪烁的是奖励词</b>：速度是普通词的倍数，答对额外回 ❤️，掉出也不扣心。答错的词不会当场打断，会在本局结束后统一列出复习。难度评估按你填的参数（并参考正确率）折算系数，乘在每题钻石上。</div>';
+    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。规则数值全部可自己填。' +
+      (FD_RULE.bonus >= 1 ? '<b>金色闪烁的是奖励词</b>：速度是普通词的倍数，答对额外回 ❤️，掉出也不扣心。' : '<b>奖励词已关闭</b>：想重新打开就到规则面板底部拨开关。') +
+      '答错的词不会当场打断，会在本局结束后统一列出复习。难度评估按你填的参数（并参考正确率）折算系数，乘在每题钻石上。</div>';
     h += '<div class="fdstat"><span>评估系数 <b id="fdFac">×1.00</b></span>' +
       '<span>每题钻石 <b id="fdUnit">12</b></span>' +
       '<span>正确率 <b id="fdAcc">—</b></span>' +
@@ -1240,7 +1246,7 @@
     var g = document.getElementById('fdGem'); if (g) g.textContent = s.gem;
     var ti = document.getElementById('fdTime'); if (ti) ti.textContent = fdClock(s.t);
     var fa = document.getElementById('fdFac'); if (fa) fa.textContent = '×' + f.toFixed(2);
-    var u = document.getElementById('fdUnit'); if (u) u.textContent = Math.max(1, Math.round(FD_RULE.gem * f));
+    var u = document.getElementById('fdUnit'); if (u) u.textContent = Math.round(FD_RULE.gem * f);
     var cb = document.getElementById('fdCombo'); if (cb) cb.textContent = s.combo;
     var ac = document.getElementById('fdAcc');
     if (ac) ac.textContent = s.answered ? Math.round(s.correct / s.answered * 100) + '%' : '—';
@@ -1279,11 +1285,11 @@
     var type = Math.random() < 0.5 ? 'en' : 'zh';
     var el = document.createElement('button');
     var lo = Math.min(r.vmin, r.vmax), hi = Math.max(r.vmin, r.vmax);
-    var bonus = Math.random() < 0.16;
+    var bonus = r.bonus >= 1 && Math.random() < 0.16;
     var it = {
       u: s.uid++, e: e, type: type, bonus: bonus,
       x: 3 + Math.random() * 50, y: -46,
-      v: (lo + Math.random() * (hi - lo)) * (bonus ? Math.max(1, r.bspd) : 1),
+      v: (lo + Math.random() * (hi - lo)) * (bonus ? r.bspd : 1),
       rot: -18 + Math.random() * 36, el: el
     };
     el.className = 'fditem ' + type + (bonus ? ' bonus' : '');
@@ -1372,13 +1378,13 @@
     var it = s.sel;
     var r = FD_RULE;
     if (o.ok) {
-      var hb = it.bonus ? Math.max(0, Math.round(r.bheart)) : r.gain;
+      var hb = it.bonus ? Math.round(r.bheart) : r.gain;
       s.hearts += hb; s.right++; s.answered++; s.correct++;
       s.combo++;
       if (it.bonus) s.bonusHit++;
       if (s.combo > s.bestCombo) s.bestCombo = s.combo;
       s.hist.push(true);
-      var gain = Math.max(1, Math.round(r.gem * fdFac(s) * (1 + Math.min(s.combo - 1, 5) * 0.1)));
+      var gain = Math.round(r.gem * fdFac(s) * (1 + Math.min(s.combo - 1, 5) * 0.1));
       s.gem += gain;
       addScore(gain); markLearned(it.e.w); markRight(it.e.w);
       fdDrop(it);
@@ -1432,21 +1438,23 @@
     }
     var h = '<div class="sheet-in">';
     h += '<div class="rowbar"><h2>⚙️ 下落消除 · 自定义规则</h2><button class="icon" data-act="close">✕</button></div>';
-    h += '<div class="mini">所有数值都可以自己填。难度评估会用这些数值算一个系数（默认规则 = ×1.00），系数越大每题钻石越多。</div>';
-    h += row('hearts', '初始 ❤️', '1', '颗', '0 心直接结束，建议 1~20');
-    h += row('gain', '答对回心', '1', '颗', '可填 0，只靠钻石');
-    h += row('wrong', '选错扣心', '1', '颗', '0~10');
-    h += row('miss', '漏接扣心', '1', '颗', '0~10');
+    h += '<div class="mini">所有数值都按你填的原样生效，<b>不再自动纠正</b>：0、负数、小数、超过常规范围的值都会照用（填 0 张同屏就不会掉卡，填 0 秒间隔会瞬间刷满）。难度评估会用这些数值算一个系数（默认规则 = ×1.00）。</div>';
+    h += row('hearts', '初始 ❤️', '1', '颗', '开局手上几颗心');
+    h += row('gain', '答对回心', '1', '颗', '普通词答对回几颗');
+    h += row('wrong', '选错扣心', '1', '颗', '选错一次扣几颗');
+    h += row('miss', '漏接扣心', '1', '颗', '掉出去一张扣几颗');
     h += row('vmin', '下落最快速度', '1', 'px/s', '数值越大越难');
-    h += row('vmax', '下落最慢速度', '1', 'px/s', '小值大值写反会自动纠正');
-    h += row('gap', '生成间隔', '0.05', '秒', '0.2~5');
-    h += row('max', '同屏上限', '1', '张', '1~10');
-    h += row('opts', '选项个数', '1', '个', '2~6');
+    h += row('vmax', '下落最慢速度', '1', 'px/s', '两个速度填反了也照样能跑');
+    h += row('gap', '生成间隔', '0.05', '秒', '每隔几秒掉一张');
+    h += row('max', '同屏上限', '1', '张', '屏幕上最多同时几张');
+    h += row('opts', '选项个数', '1', '个', '每题给几个选项');
     h += row('gem', '钻石基数', '1', '💎', '最终钻石 = 基数 × 评估系数');
-    h += row('bspd', '✨ 奖励词速度倍数', '0.5', '倍', '相对普通词快几倍，建议 2~5');
+    h += row('bspd', '✨ 奖励词速度倍数', '0.5', '倍', '普通词速度 × 这个倍数');
     h += row('bheart', '✨ 奖励词答对回心', '1', '颗', '答对奖励词额外加几颗 ❤️，掉出不扣心');
+    h += '<div class="numrow"><div class="lbl">✨ 启用奖励词<small>关掉后不再出现金色奖励词</small></div>' +
+      '<div class="switch' + (r.bonus >= 1 ? ' on' : '') + '" data-act="fdbonus"></div></div>';
     h += '<div class="fdstat" style="margin-top:10px"><span>当前评估系数 <b>' + fdFac(null).toFixed(2) + '</b></span>' +
-      '<span>每题预计 <b>' + Math.max(1, Math.round(r.gem * fdFac(null))) + '</b> 💎</span></div>';
+      '<span>每题预计 <b>' + Math.round(r.gem * fdFac(null)) + '</b> 💎</span></div>';
     h += '<div class="result"><button class="btn" data-act="fddef">恢复默认</button>' +
       '<button class="btn primary" data-act="fdsave">保存并开始</button></div>';
     h += '</div>';
@@ -1460,21 +1468,9 @@
       var k = ins[i].getAttribute('data-k');
       if (FD_KEYS.indexOf(k) < 0) continue;
       var v = parseFloat(ins[i].value);
-      if (isFinite(v)) r[k] = v;
+      if (!isFinite(v)) continue;   /* 只挡“空着/不是数字”，数字一律原样保存 */
+      r[k] = v;
     }
-    r.hearts = fdNum(r.hearts, 1, 20, FD_DEF.hearts);
-    r.gain = fdNum(r.gain, 0, 10, FD_DEF.gain);
-    r.wrong = fdNum(r.wrong, 0, 10, FD_DEF.wrong);
-    r.miss = fdNum(r.miss, 0, 10, FD_DEF.miss);
-    r.vmin = fdNum(r.vmin, 5, 200, FD_DEF.vmin);
-    r.vmax = fdNum(r.vmax, 5, 200, FD_DEF.vmax);
-    if (r.vmin > r.vmax) { var t = r.vmin; r.vmin = r.vmax; r.vmax = t; }
-    r.gap = fdNum(r.gap, 0.2, 5, FD_DEF.gap);
-    r.max = Math.round(fdNum(r.max, 1, 10, FD_DEF.max));
-    r.opts = Math.round(fdNum(r.opts, 2, 6, FD_DEF.opts));
-    r.gem = fdNum(r.gem, 0, 200, FD_DEF.gem);
-    r.bspd = fdNum(r.bspd, 1, 10, FD_DEF.bspd);
-    r.bheart = Math.round(fdNum(r.bheart, 0, 5, FD_DEF.bheart));
     return r;
   }
 
@@ -1676,6 +1672,14 @@
         break;
       case 'fdspeak': speak(d.w); break;
       case 'fdrule': fdRulesOpen(); break;
+      case 'fdbonus':
+        FD_RULE.bonus = FD_RULE.bonus >= 1 ? 0 : 1;
+        LS.set('wg:fdr', FD_RULE);
+        (function () {
+          var sw = document.querySelector('.sheet-in .switch[data-act="fdbonus"]');
+          if (sw) sw.className = 'switch' + (FD_RULE.bonus >= 1 ? ' on' : '');
+        })();
+        break;
       case 'fdsave':
         FD_RULE = fdReadRules();
         LS.set('wg:fdr', FD_RULE);
