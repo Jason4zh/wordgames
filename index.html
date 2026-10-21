@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0a1020">
-<title>四级词汇游乐场</title>
+<title>单词游乐场</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,14 +13,12 @@
     <div class="brand">
       <span class="logo">🎯</span>
       <div>
-        <b>四级词汇游乐场</b>
-        <small>Wordle · 填空 · 拼图 · 找词 · 配对 · 下落</small>
+        <b>单词游乐场</b>
+        <small>81 本词书 · Wordle · 填空 · 拼图 · 找词 · 配对 · 下落</small>
       </div>
     </div>
     <div class="stats">
-      <button class="chip" id="chipScore" data-act="shop" aria-label="钻石商店">💎 0</button>
       <span class="chip" id="chipStreak">🔥 0</span>
-      <button class="icon" data-act="shop" aria-label="钻石商店">🛒</button>
       <button class="icon" data-act="settings" aria-label="设置">⚙️</button>
     </div>
   </div>
@@ -32,14 +30,11 @@
   <div class="sheet" id="sheet"></div>
   <div class="toast" id="toast"></div>
 
-<script src="words.js"></script>
-<!-- 可选：有 dict.js（离线词典数据包）时自动优先使用；没有也不报错 -->
-<script src="dict.js"></script>
-<!-- 可选：若你有能转发并回 Access-Control-Allow-Origin 的 CORS 代理，
-     取消下一行注释并填入代理地址，即可启用「有道词典 · 柯林斯双解」这一层（数据最全）。
-     例：window.WG_PROXY = 'https://你的代理/?url=';
-     不填时默认走 Wiktionary（英文释义/真实例句/同义词）+ mymemory（例句中译）。 -->
-<!-- <script>window.WG_PROXY = '';</script> -->
+<script src="banks/meta.js"></script>
+<script src="banks/idx.js"></script>
+<!-- 搜索索引：23881 词的 [词库id, 释义摘要]，供搜索页使用 -->
+<script src="banks/sidx.js"></script>
+<!-- 词库按需加载：选中哪本才载入 banks/<id>.js，避免首屏加载上百 MB -->
 <script src="engine.js"></script>
 <script src="app.js"></script>
 </body>

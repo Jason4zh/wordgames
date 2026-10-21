@@ -140,7 +140,7 @@ b,strong{font-weight:700}
 /* ---------- 导航 ---------- */
 .tabs{display:flex;gap:2px;padding:6px 8px calc(6px + env(safe-area-inset-bottom));background:rgba(12,18,32,.92);border-top:1px solid #1d2740;backdrop-filter:blur(12px);position:sticky;bottom:0;z-index:20;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
-.tab{flex:1;min-width:56px;padding:7px 2px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:#7d8cab}
+.tab{flex:1;min-width:38px;padding:7px 1px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9.5px;color:#7d8cab}
 .tab i{font-style:normal;font-size:18px;line-height:1}
 .tab.on{color:var(--mint);background:#13251f}
 
@@ -199,15 +199,9 @@ b,strong{font-weight:700}
 .progress i{flex:1;height:4px;border-radius:2px;background:#26324b}
 .progress i.on{background:var(--mint)}
 .progress i.bad{background:var(--red)}
-/* 权威词典区块（有 JSON 渲染） */
-.dphon{font-size:12.5px;color:var(--mint);letter-spacing:.4px;margin:0 0 4px;font-variant-numeric:tabular-nums}
-.dzh{font-size:13px;color:#ffe0a3;margin:0 0 6px;line-height:1.6}
 .dsub{font-size:11px;color:#7f93b8;letter-spacing:.5px;margin:9px 0 5px;text-transform:uppercase}
 .dsub:first-child{margin-top:0}
-.dlist{margin:0;padding-left:18px}
-.dlist li{font-size:13px;line-height:1.72;color:#d3ddf0;margin-bottom:3px}
 .dpills{display:flex;flex-wrap:wrap;gap:0}
-.dsrc{margin-top:9px;font-size:10.5px;color:#5f7192;border-top:1px dashed #24314c;padding-top:7px}
 
 /* ---------- 下落消除 · 规则栏 / 自定义输入 ---------- */
 .fdrule{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;margin:0 0 8px;font-size:11px;color:var(--dim);line-height:1.5}
@@ -288,9 +282,6 @@ body.light .badge{background:#eef3fc;border-color:#d7e1f0;color:#5a6d8c}
 body.light .progress i{background:#dfe7f4}
 body.light .btn{background:#eef3fc;border-color:#d7e1f0;color:#17233a}
 body.light .btn.warn{background:#fdecee;border-color:#f0c2c9;color:#c53a4e}
-body.light .dzh{color:#8a5a10}
-body.light .dlist li{color:#2c3b53}
-body.light .dsrc{color:#8b9ab5;border-top-color:#e8eef7}
 
 /* ---------- 最高成绩徽标 / 列表 ---------- */
 .rowbar{flex-wrap:wrap}
@@ -341,24 +332,52 @@ body.light .wsgrid.ws16 .wscell{border-color:#d3deef}
 .fdwrongs .dsub{margin:0 0 2px}
 .seg button{white-space:nowrap}
 
-/* ---- 钻石商店 ---- */
+/* ---- 顶栏胶囊 ---- */
 .chip{cursor:pointer;font:inherit}
 .chip:active{transform:translateY(1px)}
-.shopg{display:flex;flex-direction:column;gap:8px;margin:8px 0}
-.shopcard{border:1px solid #26334d;border-radius:12px;padding:9px 10px;background:#101a2d}
-.shoptop{display:flex;align-items:center;gap:8px;font-size:13px}
-.shoptop .shopicon{font-size:19px}
-.shoptop b{flex:1;font-weight:800}
-.shoptop i{font-style:normal;color:#ffd76a;font-weight:800;font-size:12px}
-.shopdesc{font-size:11px;color:#8fa3c6;margin:4px 0 7px;line-height:1.5}
-.shopfoot{display:flex;align-items:center;justify-content:space-between}
-.shopfoot .own{font-size:11px;color:#8fa3c6}
 /* ---- Wordle 揭示行 ---- */
 .wrev{font-size:12px;color:#ffd76a;margin:0 0 8px;text-align:center;line-height:1.6}
 .wrev b{color:var(--mint)}
 /* ---- 找词高亮透视 ---- */
 .wscell.peek{background:#4a3a12;border-color:#ffd76a;color:#ffe9a6;animation:peekPulse .8s ease-in-out infinite}
 @keyframes peekPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-body.light .shopcard{background:#f4f7fd;border-color:#d3dfef}
-body.light .shopdesc,body.light .shopfoot .own{color:#5b6b86}
 body.light .wscell.peek{background:#fff3cf;border-color:#e2ab2d;color:#7a5200}
+
+/* ---------- 词库选择 ---------- */
+.bankrow{display:block;width:100%;text-align:left;font:inherit;background:#141d33;border:1px solid #24304c;color:#dfe8f8;border-radius:12px;padding:10px 12px;margin:0 0 8px}
+.bankrow:active{transform:scale(.985)}
+.bankrow.on{border-color:#3ddc97;background:#12291f}
+.bankrow b{display:block;font-size:13.5px;font-weight:600}
+.bankrow small{display:block;font-size:11px;color:#7286a8;margin-top:3px}
+.banktag{font-size:11px;color:#8fa0c0;margin:14px 0 6px;letter-spacing:.4px}
+body.light .bankrow{background:#fff;border-color:#e2e8f2;color:#1a2a44}
+body.light .bankrow.on{background:#eafaf2;border-color:#22b979}
+body.light .banktag{color:#6b7b95}
+
+/* ---------- 词卡里的可点词条 ---------- */
+.pill.jump{appearance:none;font:inherit;font-size:12px;line-height:1.5;cursor:pointer;background:#1f2c48;border:1px solid #3a4d75;color:#cfe0ff;padding:3px 9px;border-radius:999px;margin:3px 5px 3px 0}
+.pill.jump:active{transform:scale(.95);background:#274063}
+.pill.jump .zh{color:#8fa0c0}
+body.light .pill.jump{background:#eef4ff;border-color:#c7d8f2;color:#1c3a63}
+body.light .pill.jump .zh{color:#7b8aa2}
+/* ---------- 单词搜索 ---------- */
+.sbar{margin:2px 0 0}
+.sinput{width:100%;box-sizing:border-box;font:inherit;font-size:14px;padding:11px 13px;border-radius:12px;background:#0e172a;border:1px solid #2a3a5c;color:#e7eefc;outline:none;-webkit-appearance:none}
+.sinput:focus{border-color:#3ddc97;box-shadow:0 0 0 3px rgba(61,220,151,.13)}
+.sinput::placeholder{color:#5f6f8c}
+.srow{position:relative;display:block;width:100%;text-align:left;font:inherit;background:#141d33;border:1px solid #24304c;color:#dfe8f8;border-radius:12px;padding:9px 78px 9px 12px;margin:0 0 7px;cursor:pointer}
+.srow:active{transform:scale(.985);background:#18243d}
+.srow b{font-size:14px;font-weight:600;color:#eaf1ff;letter-spacing:.2px}
+.srow small{display:block;font-size:11.5px;color:#93a4c4;margin-top:2px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow i{position:absolute;right:10px;top:10px;font-style:normal;font-size:10.5px;color:#6d7f9e;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scount{font-size:11.5px;color:#7d8cab;margin:2px 2px 8px}
+.shint{font-size:12px;color:#7d8cab;line-height:1.95;padding:14px 4px;text-align:center}
+.shint b{color:#9fb4d8;font-weight:600}
+body.light .sinput{background:#f6f9ff;border-color:#d3deef;color:#17233a}
+body.light .sinput::placeholder{color:#93a1b8}
+body.light .srow{background:#fff;border-color:#e2e8f2;color:#1a2a44}
+body.light .srow b{color:#16243c}
+body.light .srow small{color:#6b7b95}
+body.light .srow i{color:#8090a8}
+body.light .scount,body.light .shint{color:#6b7b95}
+body.light .shint b{color:#3b6ef0}
