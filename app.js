@@ -29,7 +29,7 @@
     learned: LS.get('wg:learned', []),
     wrong: LS.get('wg:wrong', {}),
     stars: LS.get('wg:stars', []),
-    settings: Object.assign({ study: true, autoSpeak: true, online: true, onlyWrong: false, level: 'mix', light: false },
+    settings: Object.assign({ study: true, autoSpeak: true, online: true, onlyWrong: false, level: 'mix', light: false, wlen: 0 },
       LS.get('wg:settings', {}))
   };
 
@@ -359,23 +359,74 @@
   }
 
   /* 调试/自检入口：可在控制台用 WG_DICT.parseYoudao(原始 JSON) 检查解析结果 */
-  window.WG_DICT = { parseYoudao: parseYoudao, parseDictApi: parseDictApi, renderDict: renderDict };
+  window.WG_DICT = { parseYoudao: parseYoudao, parseDictApi: parseDictApi, parseFreeDict: parseFreeDict, parseDatamuse: parseDatamuse, renderDict: renderDict };
 
   /* 有道 jsonapi 不带 CORS 头，浏览器（含 file://）会直接拒绝。
    * 若你有可用的 CORS 代理（能转发并回 Access-Control-Allow-Origin），
    * 在 index.html 里写 window.WG_PROXY='https://你的代理/?url=' 即可启用有道层。 */
   var PROXY = window.WG_PROXY || '';
 
+  /* 【修复】api.dictionaryapi.dev 与 dict.youdao.com 都已不再返回 CORS 头，
+   * file:// 页面（origin 为 null）会在 fetch 阶段直接失败。
+   * 改为两个允许跨域的公开源：Free Dictionary API（维基词典数据）+ Datamuse（WordNet）。 */
+  function parseFreeDict(j) {
+    var out = { src: 'Free Dictionary API · Wiktionary', phon: '', zh: '', defs: [], collins: [], sents: [], phrs: [], syn: [] };
+    var es = (j && j.entries) || [], i, k;
+    if (!es.length) return out;
+    var bestPhon = '', firstPhon = '';
+    for (i = 0; i < es.length; i++) {
+      var ps = es[i].pronunciations || [];
+      for (k = 0; k < ps.length; k++) {
+        var pn = ps[k];
+        if (!pn || !pn.text) continue;
+        if (pn.type && pn.type !== 'ipa') continue;
+        if (!firstPhon) firstPhon = pn.text;
+        if (!bestPhon && /General American/i.test((pn.tags || []).join(' '))) bestPhon = pn.text;
+      }
+    }
+    out.phon = bestPhon || firstPhon;
+    var POS = { noun: 'n.', verb: 'v.', adjective: 'adj.', adverb: 'adv.', pronoun: 'pron.', preposition: 'prep.', conjunction: 'conj.', interjection: 'int.', numeral: 'num.', determiner: 'det.' };
+    var seen = {}, MAXD = 6;
+    for (i = 0; i < es.length && out.defs.length < MAXD; i++) {
+      var pos = POS[es[i].partOfSpeech] || '';
+      var senses = es[i].senses || [];
+      for (k = 0; k < senses.length && out.defs.length < MAXD; k++) {
+        var sn = senses[k] || {};
+        var tx = String(sn.definition || '').trim();
+        if (!tx || seen[tx]) continue;
+        seen[tx] = 1;
+        tx = tx.replace(/^\((obsolete|archaic|dated|rare|slang|informal|dialectal)\)\s*/i, '');
+        out.defs.push((pos ? pos + ' ' : '') + tx);
+        var ex = (sn.examples || [])[0];
+        if (!ex && sn.quotes && sn.quotes[0]) ex = sn.quotes[0].text;
+        if (ex && out.sents.length < 4 && String(ex).length < 170) out.sents.push({ en: String(ex).trim() });
+        (sn.synonyms || []).forEach(function (x) { if (out.syn.length < 8 && out.syn.indexOf(x) < 0) out.syn.push(x); });
+      }
+      (es[i].synonyms || []).forEach(function (x) { if (out.syn.length < 8 && out.syn.indexOf(x) < 0) out.syn.push(x); });
+    }
+    return out;
+  }
+  function parseDatamuse(j) {
+    var out = { src: 'Datamuse · WordNet', phon: '', zh: '', defs: [], collins: [], sents: [], phrs: [], syn: [] };
+    var it = (j && j[0]) || null;
+    if (!it) return out;
+    var POS = { n: 'n.', v: 'v.', adj: 'adj.', adv: 'adv.' };
+    (it.defs || []).slice(0, 6).forEach(function (d) {
+      var t = String(d), tab = t.indexOf('\t');
+      var pos = tab > 0 ? (POS[t.slice(0, tab)] || '') : '';
+      var body = (tab > 0 ? t.slice(tab + 1) : t).replace(/^\([^)]*\)\s*/, '');
+      if (body) out.defs.push((pos ? pos + ' ' : '') + body);
+    });
+    return out;
+  }
+
   var DICT_API = [
-    { label: '有道词典 · 柯林斯双解',
-      url: function (w) {
-        if (!PROXY) return null;
-        return PROXY + encodeURIComponent('https://dict.youdao.com/jsonapi?q=' + w);
-      },
-      parse: parseYoudao },
-    { label: 'Wiktionary · 自由词典',
-      url: function (w) { return 'https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(w); },
-      parse: parseDictApi }
+    { label: 'Free Dictionary API · Wiktionary',
+      url: function (w) { return 'https://freedictionaryapi.com/api/v1/entries/en/' + encodeURIComponent(w); },
+      parse: parseFreeDict },
+    { label: 'Datamuse · WordNet',
+      url: function (w) { return 'https://api.datamuse.com/words?sp=' + encodeURIComponent(w) + '&md=dpr&max=1'; },
+      parse: parseDatamuse }
   ];
 
   function setDictSrc(t) {
@@ -421,7 +472,7 @@
     var local = dictFromPack(w);
     if (local) { box.innerHTML = renderDict(w, local); setDictSrc('离线数据包'); return; }
 
-    var cacheKey = 'wg:d6:' + w;
+    var cacheKey = 'wg:d7:' + w;
     var cached = LS.get(cacheKey, null);
     if (cached) {
       try {
@@ -484,6 +535,8 @@
   var WD = { s: null };
 
   function wordleLen() {
+    var fixed = Math.round(Number(STATE.settings.wlen) || 0);
+    if (fixed >= 4) return fixed;
     var lv = STATE.settings.level;
     if (lv === 'easy') return pick([4, 5]);
     if (lv === 'mid') return pick([6, 7]);
@@ -528,8 +581,13 @@
     var s = WD.s, e = s.e, senses = WE.senses(e);
     var h = '<div class="panel">';
     h += '<div class="rowbar"><h2>🟩 猜单词 Wordle</h2><div class="sub">' + s.len + ' 个字母 · 还剩 <b>' + (s.max - s.row) + '</b> 次</div></div>';
-    h += '<div class="clue"><span class="pos">' + esc(WE.posShort(e)) + '</span><span class="zh">' + esc(senses.slice(0, 3).join('；')) + '</span>';
-    h += '<div class="tip">根据中文释义猜出英文单词。绿=字母和位置都对，黄=有这个字母但位置不对。</div></div>';
+    var wlCur = Math.round(Number(STATE.settings.wlen) || 0);
+    h += '<div class="seg" style="width:fit-content;max-width:100%;flex-wrap:wrap;margin:0 0 9px">';
+    [0, 4, 5, 6, 7, 8].forEach(function (n) {
+      h += '<button data-act="wlen" data-n="' + n + '" class="' + (wlCur === n ? 'on' : '') + '">' + (n ? n + ' 字母' : '🎲 随机') + '</button>';
+    });
+    h += '</div>';
+    h += '<div class="clue"><div class="tip">不给中文提示，只按 <b>' + s.len + '</b> 个字母硬猜。绿=字母和位置都对，黄=有这个字母但位置不对。</div></div>';
 
     h += '<div class="grid" id="wgrid" style="grid-template-columns:repeat(' + s.len + ',1fr);max-width:' + Math.min(s.len * 52, 340) + 'px">';
     for (var r = 0; r < s.max; r++) {
@@ -558,9 +616,10 @@
     });
     h += '</div>';
 
-    if (s.over) {
-      h += '<div class="result">' + (s.win ? '<span class="badge" style="color:#3ddc97">✅ 猜对了</span>' : '<span class="badge" style="color:#ff5f73">❌ 答案是 ' + esc(s.ans) + '</span>');
-      h += '<button class="btn primary" data-act="new">再来一个</button>';
+      if (s.over) {
+        h += '<div class="result">' + (s.win ? '<span class="badge" style="color:#3ddc97">✅ 猜对了</span>' : '<span class="badge" style="color:#ff5f73">❌ 答案是 ' + esc(s.ans) + '</span>');
+        h += '<div class="sub" style="width:100%">' + esc(WE.posShort(e)) + ' ' + esc(senses.slice(0, 2).join('；')) + '</div>';
+        h += '<button class="btn primary" data-act="new">再来一个</button>';
       h += '<button class="btn" data-act="card" data-w="' + e.w + '">看词卡</button></div>';
     }
     h += '<div class="mini">键盘可直接输入；Enter 提交，Backspace 删字。</div>';
@@ -921,7 +980,7 @@
     });
     var h = '<div class="panel">';
     h += '<div class="rowbar"><h2>🔍 单词找词</h2><div class="sub">找到 ' + s.foundCount + '/' + s.words.length + ' · 出手 ' + s.tries + '</div></div>';
-    h += '<div class="mini" style="margin:0 0 7px">在字母棋盘里找出列表中的单词：先点起点格，再点终点格。单词可横、竖、斜 45° 排列，也可能首尾反向。点下方的词可以看词卡。</div>';
+    h += '<div class="mini" style="margin:0 0 7px">棋盘里藏着这一局的四级单词，但不会提前告诉你。先点起点格再点终点格，词可横、竖、斜 45° 排列，也可能首尾反向。找对之后词才会出现在下方，点它可以看词卡。</div>';
     h += '<div class="wsgrid' + (N >= 12 ? ' ws16' : '') + '" style="grid-template-columns:repeat(' + N + ',1fr)">';
     for (i = 0; i < N; i++) for (j = 0; j < N; j++) {
       idx = i * N + j;
@@ -933,10 +992,14 @@
     }
     h += '</div>';
     h += '<div class="wslist">';
-    s.words.forEach(function (w) {
-      h += '<button class="wschip' + (w.found ? ' got' : '') + '" data-act="card" data-w="' + esc(w.e.w) + '">' +
-        esc(w.w) + '</button>';
-    });
+    var shown = s.words.filter(function (w) { return w.found; });
+    if (!shown.length) {
+      h += '<span class="wshint">🔒 目标词不预告 · 找出第一个才会出现在这里</span>';
+    } else {
+      shown.forEach(function (w) {
+        h += '<button class="wschip got" data-act="card" data-w="' + esc(w.e.w) + '">' + esc(w.w) + '</button>';
+      });
+    }
     h += '</div>';
     if (s.done) {
       h += '<div class="result"><span class="badge" style="color:#3ddc97">✅ 全部找到</span>' +
@@ -1080,8 +1143,8 @@
    *      直接乘在每题钻石上 —— 填得越狠，钻石越多
    * ===================================================================== */
   var FD = { s: null };
-  var FD_KEYS = ['hearts', 'gain', 'wrong', 'miss', 'vmin', 'vmax', 'gap', 'max', 'opts', 'gem'];
-  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 32, vmax: 46, gap: 1.25, max: 4, opts: 4, gem: 12 };
+  var FD_KEYS = ['hearts', 'gain', 'wrong', 'miss', 'vmin', 'vmax', 'gap', 'max', 'opts', 'gem', 'bspd', 'bheart'];
+  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 32, vmax: 46, gap: 1.25, max: 4, opts: 4, gem: 12, bspd: 3, bheart: 1 };
   var FD_RULE = (function () {
     var save = LS.get('wg:fdr', null), r = {}, i, k, v;
     for (i = 0; i < FD_KEYS.length; i++) { k = FD_KEYS[i]; r[k] = FD_DEF[k]; }
@@ -1113,7 +1176,7 @@
   function fdFac(s) {
     var r = FD_RULE;
     var mid = (r.vmin + r.vmax) / 2;
-    var arr = [mid / 39, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts];
+    var arr = [mid / 39, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts, Math.max(1, r.bspd) / 3];
     var sum = 0;
     arr.forEach(function (v) { sum += Math.max(0.5, Math.min(2, v)); });
     var f = sum / arr.length;
@@ -1128,7 +1191,7 @@
     var r = FD_RULE;
     return '❤️' + r.hearts + ' · 对+' + r.gain + ' · 错−' + r.wrong + ' · 漏−' + r.miss +
       ' · 速' + r.vmin + '~' + r.vmax + ' · ' + r.gap + 's/张 · 同屏' + r.max +
-      ' · 选项' + r.opts + ' · 💎' + r.gem;
+      ' · 选项' + r.opts + ' · 💎' + r.gem + ' · ✨×' + r.bspd + ' +' + r.bheart + '❤️';
   }
 
   function fdStop() {
@@ -1143,7 +1206,7 @@
     FD.s = {
       pool: poolByLevel(3, 12), items: [], hearts: FD_RULE.hearts, sel: null, opts: [],
       uid: 1, over: false, running: true, last: 0, spawnT: 0, t: 0, paused: false,
-      right: 0, answered: 0, correct: 0, combo: 0, bestCombo: 0, hist: [], gem: 0
+      right: 0, answered: 0, correct: 0, combo: 0, bestCombo: 0, hist: [], gem: 0, wrongs: [], bonusHit: 0
     };
     fdRender();
     fdSpawn(); fdSpawn();
@@ -1153,7 +1216,7 @@
     var h = '<div class="panel">';
     h += '<div class="rowbar"><h2>🌠 下落消除</h2><div class="sub">' +
       '❤️ <b id="fdHearts">5</b> · ⏱ <b id="fdTime">0:00</b> · 答对 <b id="fdRight">0</b> · 💎 <b id="fdGem">0</b></div></div>';
-    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。规则数值全部可自己填；答错会亮出该词的词卡（暂停计时与下落），看完点“继续”。难度评估按你填的参数（并参考正确率）折算系数，乘在每题钻石上。</div>';
+    h += '<div class="mini" style="margin:0 0 6px">点中下落的卡片选中它，再在下方选出对应答案。规则数值全部可自己填。<b>金色闪烁的是奖励词</b>：速度是普通词的倍数，答对额外回 ❤️，掉出也不扣心。答错的词不会当场打断，会在本局结束后统一列出复习。难度评估按你填的参数（并参考正确率）折算系数，乘在每题钻石上。</div>';
     h += '<div class="fdstat"><span>评估系数 <b id="fdFac">×1.00</b></span>' +
       '<span>每题钻石 <b id="fdUnit">12</b></span>' +
       '<span>正确率 <b id="fdAcc">—</b></span>' +
@@ -1216,13 +1279,14 @@
     var type = Math.random() < 0.5 ? 'en' : 'zh';
     var el = document.createElement('button');
     var lo = Math.min(r.vmin, r.vmax), hi = Math.max(r.vmin, r.vmax);
+    var bonus = Math.random() < 0.16;
     var it = {
-      u: s.uid++, e: e, type: type,
+      u: s.uid++, e: e, type: type, bonus: bonus,
       x: 3 + Math.random() * 50, y: -46,
-      v: lo + Math.random() * (hi - lo),
+      v: (lo + Math.random() * (hi - lo)) * (bonus ? Math.max(1, r.bspd) : 1),
       rot: -18 + Math.random() * 36, el: el
     };
-    el.className = 'fditem ' + type;
+    el.className = 'fditem ' + type + (bonus ? ' bonus' : '');
     el.setAttribute('data-act', 'fdsel');
     el.setAttribute('data-u', it.u);
     el.textContent = type === 'en' ? e.w : shortZh(e);
@@ -1263,9 +1327,14 @@
   function fdLose(it) {
     var s = FD.s;
     fdDrop(it);
+    if (s.sel === it) { s.sel = null; s.opts = []; }
+    if (it.bonus) {
+      fdHud(); fdBank();
+      toast('✨ 奖励词掉出，不扣 ❤️');
+      return;
+    }
     s.hearts -= FD_RULE.miss;
     s.answered++; s.combo = 0; s.hist.push(false);
-    if (s.sel === it) { s.sel = null; s.opts = []; }
     fdHud(); fdBank();
     if (s.hearts <= 0) { fdOver(); return; }
     toast('漏接一个，−' + FD_RULE.miss + ' ❤️');
@@ -1303,8 +1372,10 @@
     var it = s.sel;
     var r = FD_RULE;
     if (o.ok) {
-      s.hearts += r.gain; s.right++; s.answered++; s.correct++;
+      var hb = it.bonus ? Math.max(0, Math.round(r.bheart)) : r.gain;
+      s.hearts += hb; s.right++; s.answered++; s.correct++;
       s.combo++;
+      if (it.bonus) s.bonusHit++;
       if (s.combo > s.bestCombo) s.bestCombo = s.combo;
       s.hist.push(true);
       var gain = Math.max(1, Math.round(r.gem * fdFac(s) * (1 + Math.min(s.combo - 1, 5) * 0.1)));
@@ -1313,34 +1384,41 @@
       fdDrop(it);
       s.sel = null; s.opts = [];
       fdHud(); fdBank();
-      toast('✅ 消除 +' + r.gain + '❤️ 💎+' + gain + (s.combo > 1 ? ' · 连击 ×' + s.combo : ''));
+      toast((it.bonus ? '✨ 奖励词 +' : '✅ 消除 +') + hb + '❤️ 💎+' + gain + (s.combo > 1 ? ' · 连击 ×' + s.combo : ''));
       return;
     }
     s.hearts -= r.wrong;
     s.answered++; s.combo = 0; s.hist.push(false);
     markWrong(it.e.w);
-    var btns = document.querySelectorAll('#fdBank .fdopt');
-    if (btns[k]) btns[k].classList.add('bad');
-    fdHud();
+    if (s.wrongs.indexOf(it.e.w) < 0) s.wrongs.push(it.e.w);
+    fdDrop(it);
+    s.sel = null; s.opts = [];
+    fdHud(); fdBank();
     toast('❌ 选错 −' + r.wrong + ' ❤️');
-    if (s.hearts <= 0) { fdOver(); return; }
-    /* 弹出错词词卡，同时暂停计时与下落 */
-    s.paused = true;
-    s.sel = it;
-    fdWrongCard(it);
+    if (s.hearts <= 0) fdOver();
   }
   function fdOver() {
     var s = FD.s;
+    if (s.over) return;
     s.over = true; s.running = false; s.paused = false; roundEnd();
     if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
     var box = document.getElementById('fdBox');
     if (box) box.innerHTML = '<div class="fdover"><div class="fdheart">💔</div><h3>❤️ 用完了</h3>' +
-      '<div class="sub">用时 ' + fdClock(s.t) + ' · 消除 ' + s.right + ' 个 · 💎 +' + s.gem + '</div>' +
+      '<div class="sub">用时 ' + fdClock(s.t) + ' · 消除 ' + s.right + ' 个 · ✨奖励词 ' + s.bonusHit + ' 个 · 💎 +' + s.gem + '</div>' +
       '<div class="sub">正确率 ' + (s.answered ? Math.round(s.correct / s.answered * 100) : 0) +
       '% · 最高连击 ' + s.bestCombo + ' · 评估 ×' + fdFac(s).toFixed(2) + '</div>' +
       '<button class="btn primary" data-act="new" style="margin-top:10px">再来一局</button></div>';
     var bank = document.getElementById('fdBank');
-    if (bank) bank.innerHTML = '';
+    if (bank) bank.innerHTML = fdWrongList();
+  }
+  /* 本局结束后才展示错词 */
+  function fdWrongList() {
+    var s = FD.s;
+    if (!s || !s.wrongs.length) return '<div class="fdtip">🎉 这一局没有选错的词</div>';
+    return '<div class="fdwrongs"><div class="dsub">本局错词 ' + s.wrongs.length + ' 个 · 点开复习</div>' +
+      '<div class="dpills">' + s.wrongs.map(function (w) {
+        return '<button class="pill" data-act="card" data-w="' + esc(w) + '">' + esc(w) + '</button>';
+      }).join('') + '</div></div>';
   }
 
   /* 自定义规则面板：所有数值手填 */
@@ -1365,6 +1443,8 @@
     h += row('max', '同屏上限', '1', '张', '1~10');
     h += row('opts', '选项个数', '1', '个', '2~6');
     h += row('gem', '钻石基数', '1', '💎', '最终钻石 = 基数 × 评估系数');
+    h += row('bspd', '✨ 奖励词速度倍数', '0.5', '倍', '相对普通词快几倍，建议 2~5');
+    h += row('bheart', '✨ 奖励词答对回心', '1', '颗', '答对奖励词额外加几颗 ❤️，掉出不扣心');
     h += '<div class="fdstat" style="margin-top:10px"><span>当前评估系数 <b>' + fdFac(null).toFixed(2) + '</b></span>' +
       '<span>每题预计 <b>' + Math.max(1, Math.round(r.gem * fdFac(null))) + '</b> 💎</span></div>';
     h += '<div class="result"><button class="btn" data-act="fddef">恢复默认</button>' +
@@ -1393,6 +1473,8 @@
     r.max = Math.round(fdNum(r.max, 1, 10, FD_DEF.max));
     r.opts = Math.round(fdNum(r.opts, 2, 6, FD_DEF.opts));
     r.gem = fdNum(r.gem, 0, 200, FD_DEF.gem);
+    r.bspd = fdNum(r.bspd, 1, 10, FD_DEF.bspd);
+    r.bheart = Math.round(fdNum(r.bheart, 0, 5, FD_DEF.bheart));
     return r;
   }
 
@@ -1608,6 +1690,8 @@
         LS.set('wg:fdr', FD_RULE);
         fdRulesOpen(); toast('已恢复默认');
         break;
+      case 'wlen':
+        STATE.settings.wlen = +d.n || 0; saveSettings(); wordleNew(); break;
 
 
     }

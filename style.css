@@ -331,3 +331,12 @@ body.light .fdwc-q{color:#8b9ab5}
 .wsgrid.ws16 .wscell{font-size:9.5px;border-radius:5px;border-width:1px;font-weight:700}
 .wsgrid.ws16 .wscell.sel{transform:scale(1.12)}
 body.light .wsgrid.ws16 .wscell{border-color:#d3deef}
+
+/* ===== 第六轮：找词不预告 / 下落奖励词 / 结算错词 / wordle 字母数 ===== */
+.wshint{display:inline-block;font-size:11.5px;color:var(--dim);padding:6px 2px}
+.fditem.bonus{border-color:#d9a12b;background:#3a2a10;color:#ffd98a;animation:fdPulse 1.2s ease-in-out infinite}
+.fditem.bonus.sel{border-color:#ffd166;background:#4a3512;color:#ffe9b0}
+@keyframes fdPulse{0%,100%{box-shadow:0 0 0 1px rgba(255,196,64,.3),0 6px 14px -2px rgba(255,190,60,.4)}50%{box-shadow:0 0 0 3px rgba(255,196,64,.62),0 10px 20px -2px rgba(255,190,60,.7)}}
+.fdwrongs{margin-top:2px;padding:10px 12px;border:1px solid #3c2a2c;background:#241a1d;border-radius:12px}
+.fdwrongs .dsub{margin:0 0 2px}
+.seg button{white-space:nowrap}
