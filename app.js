@@ -42,6 +42,54 @@
   }
   function saveWrong() { LS.set('wg:wrong', STATE.wrong); }
   function saveStars() { LS.set('wg:stars', STATE.stars); }
+  /* ---------------- 钻石商店 / 道具 ---------------- */
+  var SHOP = {
+    tip: { icon: '\u{1F4A1}', name: '提示券', price: 20, desc: 'Wordle 揭示一个字母 · 填空给一个字母 · 找词高亮一个词 · 配对翻看 2 秒' },
+    shield: { icon: '\u{1F6E1}\ufe0f', name: '护盾券', price: 50, desc: '下落消除：下一次扣心（选错或漏接）直接免疫' },
+    slow: { icon: '\u23f8\ufe0f', name: '缓速券', price: 40, desc: '下落消除：8 秒内下落速度降到 45%，用来救场' }
+  };
+  var INV = (function () {
+    var v = LS.get('wg:inv', {}) || {}, r = {}, k;
+    for (k in SHOP) r[k] = Math.max(0, parseInt(v[k], 10) || 0);
+    return r;
+  })();
+  function saveInv() { LS.set('wg:inv', INV); }
+  function invN(k) { return Math.max(0, parseInt(INV[k], 10) || 0); }
+  function spendGem(n) {
+    if (STATE.score < n) return false;
+    STATE.score -= n;
+    if (STATE.score < 0) STATE.score = 0;
+    LS.set('wg:score', STATE.score); syncTop();
+    return true;
+  }
+  /* 先用券，没券就按商店价直接扣钻石 */
+  function useItem(k) {
+    if (invN(k) > 0) { INV[k] = invN(k) - 1; saveInv(); return 'item'; }
+    if (spendGem(SHOP[k].price)) return 'buy';
+    toast('\u{1F48E} 不够（要 ' + SHOP[k].price + '），先去玩几局攒钻石');
+    return '';
+  }
+  function itemLabel(k, text) {
+    return text + '（' + (invN(k) > 0 ? '券 ' + invN(k) : '\u{1F48E}' + SHOP[k].price) + '）';
+  }
+  function shopOpen() {
+    var h = '<div class="sheet-in">';
+    h += '<div class="rowbar"><h2>\u{1F6D2} 钻石商店</h2><button class="icon" data-act="close">\u2715</button></div>';
+    h += '<div class="mini">你现在有 <b>\u{1F48E} ' + STATE.score + '</b>。买来的道具存在本机，进游戏后在需要的地方点按钮用；没券时点那些按钮会直接按商店价扣钻石。</div>';
+    h += '<div class="shopg">';
+    for (var k in SHOP) {
+      var it = SHOP[k];
+      h += '<div class="shopcard"><div class="shoptop"><span class="shopicon">' + it.icon + '</span><b>' + it.name + '</b><i>\u{1F48E} ' + it.price + '</i></div>' +
+        '<div class="shopdesc">' + it.desc + '</div>' +
+        '<div class="shopfoot"><span class="own">持有 <b>' + invN(k) + '</b> 张</span>' +
+        '<button class="btn small" data-act="buy" data-k="' + k + '">买 1 张</button></div></div>';
+    }
+    h += '</div>';
+    h += '<div class="mini" style="margin-top:10px">\u{1F48E} 来源：Wordle / 填空 / 拼图 / 找词 / 配对每局结算，以及下落消除按你自己填的规则折算出的钻石。</div>';
+    h += '<div class="result"><button class="btn primary" data-act="close">知道了</button></div>';
+    h += '</div>';
+    Sheet.innerHTML = h; Sheet.classList.add('on');
+  }
   function addScore(n) {
     STATE.score += n;
     if (n > 0) { STATE.streak++; if (STATE.streak > STATE.best) { STATE.best = STATE.streak; LS.set('wg:best', STATE.best); } }
@@ -552,7 +600,7 @@
       if (f.length) pool = f;
     }
     var e = pick(pool);
-    WD.s = { e: e, ans: e.w, len: len, rows: [], cur: '', row: 0, max: len >= 8 ? 5 : 6, over: false, animRow: -1 };
+    WD.s = { e: e, ans: e.w, len: len, rows: [], cur: '', row: 0, max: len >= 8 ? 5 : 6, over: false, animRow: -1, rev: {} };
     wordleRender();
   }
   function evalGuess(g, a) {
@@ -589,6 +637,10 @@
     h += '</div>';
     h += '<div class="clue"><div class="tip">不给中文提示，只按 <b>' + s.len + '</b> 个字母硬猜。绿=字母和位置都对，黄=有这个字母但位置不对。</div></div>';
 
+    var revIdx = Object.keys(s.rev).map(Number).sort(function (a, b) { return a - b; });
+    if (revIdx.length) {
+      h += '<div class="wrev">' + revIdx.map(function (i2) { return '第 ' + (i2 + 1) + ' 个是 <b>' + s.rev[i2] + '</b>'; }).join(' · ') + '</div>';
+    }
     h += '<div class="grid" id="wgrid" style="grid-template-columns:repeat(' + s.len + ',1fr);max-width:' + Math.min(s.len * 52, 340) + 'px">';
     for (var r = 0; r < s.max; r++) {
       var row = s.rows[r];
@@ -621,11 +673,25 @@
         h += '<div class="sub" style="width:100%">' + esc(WE.posShort(e)) + ' ' + esc(senses.slice(0, 2).join('；')) + '</div>';
         h += '<button class="btn primary" data-act="new">再来一个</button>';
       h += '<button class="btn" data-act="card" data-w="' + e.w + '">看词卡</button></div>';
-    }
+      } else {
+          h += '<div class="result"><button class="btn small" data-act="wtip">' + itemLabel('tip', '\u{1F4A1} 揭示一个字母') + '</button></div>';
+      }
     h += '<div class="mini">键盘可直接输入；Enter 提交，Backspace 删字。</div>';
     h += '</div>';
     Stage.innerHTML = h; paintBest();
     s.animRow = -1;
+  }
+  function wordleTip() {
+    var s = WD.s;
+    if (!s || s.over) return;
+    var pool = [], i;
+    for (i = 0; i < s.ans.length; i++) if (!s.rev[i]) pool.push(i);
+    if (!pool.length) { toast('字母都揭示过了'); return; }
+    if (!useItem('tip')) return;
+    var k = pick(pool);
+    s.rev[k] = s.ans[k];
+    wordleRender();
+    toast('\u{1F4A1} 第 ' + (k + 1) + ' 个字母是 ' + s.ans[k]);
   }
   function wordleKey(k) {
     var s = WD.s;
@@ -725,7 +791,7 @@
 
     if (!s.done) {
       h += '<div class="result"><button class="btn primary" data-act="check">检查</button>' +
-        '<button class="btn" data-act="hint">提示一个字母 (-20)</button>' +
+        '<button class="btn" data-act="hint">' + (invN('tip') > 0 ? '\u{1F4A1} 提示一个字母（券 ' + invN('tip') + '）' : '提示一个字母 (-' + SHOP.tip.price + ')') + '</button>' +
         '<button class="btn ghost" data-act="new">换一个</button></div>';
     } else {
       h += '<div class="result"><span class="badge" style="color:#3ddc97">✅ 正确</span>' +
@@ -789,6 +855,8 @@
   function fillHint() {
     var s = FL.s;
     if (s.done) return;
+    if (invN('tip') > 0) { INV.tip = invN('tip') - 1; saveInv(); }
+    else if (!spendGem(SHOP.tip.price)) { toast('\u{1F48E} 不够（要 ' + SHOP.tip.price + '），先玩几局攒一点'); return; }
     for (var i = 0; i < s.slots.length; i++) {
       var sl = s.slots[i];
       if (sl.hid && !sl.lock && sl.fill !== sl.ch) {
@@ -799,7 +867,7 @@
         for (var k = 0; k < s.bank.length; k++) {
           if (!s.bank[k].used && s.bank[k].ch === sl.ch) { s.bank[k].used = true; break; }
         }
-        STATE.score = Math.max(0, STATE.score - 20); LS.set('wg:score', STATE.score); syncTop();
+        /* 券或钻石已在函数开头扣过 */
         fillRender(); return;
       }
     }
@@ -947,6 +1015,40 @@
     return { g: g, placed: placed };
   }
 
+  function wsCellsOf(g, N, w) {
+    for (var d = 0; d < 8; d++) {
+      var dr = WS_DIRS[d][0], dc = WS_DIRS[d][1];
+      for (var r = 0; r < N; r++) {
+        for (var c = 0; c < N; c++) {
+          var ok = true, cells = [];
+          for (var k = 0; k < w.length; k++) {
+            var rr = r + dr * k, cc = c + dc * k;
+            if (rr < 0 || rr >= N || cc < 0 || cc >= N) { ok = false; break; }
+            if (g[rr][cc] !== w[k]) { ok = false; break; }
+            cells.push(rr * N + cc);
+          }
+          if (ok) return cells;
+        }
+      }
+    }
+    return null;
+  }
+  function llPeek() {
+    var s = LL.s;
+    if (!s || s.done) return;
+    var cand = s.words.filter(function (w) { return !w.found; });
+    if (!cand.length) { toast('都找完啦'); return; }
+    if (!useItem('tip')) return;
+    var w = pick(cand);
+    s.peek = wsCellsOf(s.grid, s.N, w.w) || [];
+    s.peekW = w.e.w;
+    llRender();
+    toast('\u{1F4A1} 高亮的是「' + shortZh(w.e) + '」');
+    setTimeout(function () {
+      if (LL.s !== s) return;
+      s.peek = []; s.peekW = ''; llRender();
+    }, 2800);
+  }
   function llNew() {
     roundStart();
     var pool = poolByLevel(3, 6);
@@ -971,7 +1073,7 @@
       words: picked.map(function (e) {
         return { e: e, w: String(e.w).toLowerCase(), found: false, cells: null };
       }),
-      start: -1, bad: [], foundCount: 0, tries: 0, done: false
+      start: -1, bad: [], foundCount: 0, tries: 0, done: false, peek: [], peekW: ''
     };
     llRender();
   }
@@ -991,6 +1093,7 @@
       cls = 'wscell';
       if (got[idx]) cls += ' got';
       if (s.start === idx) cls += ' sel';
+      if (s.peek && s.peek.indexOf(idx) >= 0) cls += ' peek';
       if (s.bad.indexOf(idx) >= 0) cls += ' bad';
       h += '<button class="' + cls + '" data-act="ll" data-i="' + idx + '">' + esc(s.grid[i][j]) + '</button>';
     }
@@ -1010,6 +1113,7 @@
         '<button class="btn primary" data-act="new">再来一局</button></div>';
     } else {
       h += '<div class="result"><button class="btn ghost" data-act="new">换一盘</button></div>';
+      h += '<button class="btn small" data-act="llpeek">' + itemLabel('tip', '\u{1F4A1} 高亮一个词') + '</button>';
     }
     h += '</div>';
     Stage.innerHTML = h; paintBest();
@@ -1083,7 +1187,7 @@
       cards.push({ k: k, type: 'en', text: e.w, e: e });
       cards.push({ k: k, type: 'zh', text: shortZh(e), e: e });
     });
-    MC.s = { cards: shuffle(cards), first: -1, lock: false, moves: 0, matched: 0, done: false };
+    MC.s = { cards: shuffle(cards), first: -1, lock: false, moves: 0, matched: 0, done: false, peek: false };
     matchRender();
   }
   function matchRender() {
@@ -1096,7 +1200,7 @@
       var cls = 'mcard';
       if (c.type === 'en') cls += ' en';
       if (c.done) cls += ' done open';
-      else if (c.open) cls += ' open';
+      else if (c.open || s.peek) cls += ' open';
       h += '<button class="' + cls + '" data-act="mcard" data-i="' + i + '">' +
         '<span class="mci"><span class="mcf mcb">?</span>' +
         '<span class="mcf mcfr">' + esc(c.text) + '</span></span></button>';
@@ -1107,9 +1211,23 @@
         '<button class="btn primary" data-act="new">再来一局</button></div>';
     } else {
       h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
+      h += '<button class="btn small" data-act="mpeek">' + itemLabel('tip', '\u{1F4A1} 透视 2 秒') + '</button>';
     }
     h += '</div>';
     Stage.innerHTML = h; paintBest();
+  }
+  function matchPeek() {
+    var s = MC.s;
+    if (!s || s.done || s.peek) return;
+    if (!useItem('tip')) return;
+    s.peek = true; s.lock = true;
+    matchRender();
+    toast('\u{1F4A1} 全部牌面亮 2 秒，记住位置');
+    setTimeout(function () {
+      if (MC.s !== s) return;
+      s.peek = false; s.lock = false; s.first = -1;
+      matchRender();
+    }, 2000);
   }
   function matchClick(i) {
     var s = MC.s;
@@ -1210,7 +1328,7 @@
     FD.s = {
       pool: poolByLevel(3, 12), items: [], hearts: FD_RULE.hearts, sel: null, opts: [],
       uid: 1, over: false, running: true, last: 0, spawnT: 0, t: 0, paused: false,
-      right: 0, answered: 0, correct: 0, combo: 0, bestCombo: 0, hist: [], gem: 0, wrongs: [], bonusHit: 0
+      right: 0, answered: 0, correct: 0, combo: 0, bestCombo: 0, hist: [], gem: 0, wrongs: [], bonusHit: 0, shield: 0, slowUntil: 0
     };
     fdRender();
     fdSpawn(); fdSpawn();
@@ -1231,7 +1349,9 @@
       '<button class="btn small" data-act="fdrule">⚙️ 自定义规则</button></div>';
     h += '<div class="fdbox" id="fdBox"></div>';
     h += '<div class="fdbank" id="fdBank"></div>';
-    h += '<div class="result"><button class="btn ghost" data-act="new">重开</button></div>';
+    h += '<div class="result"><button class="btn ghost" data-act="new">重开</button>' +
+      '<button class="btn small" data-act="fdshield">' + (FD.s && FD.s.shield ? '\u{1F6E1}\ufe0f 护盾 ×' + FD.s.shield : itemLabel('shield', '\u{1F6E1}\ufe0f 护盾')) + '</button>' +
+      '<button class="btn small" data-act="fdslow">' + itemLabel('slow', '\u23f8\ufe0f 缓速 8 秒') + '</button></div>';
     h += '</div>';
     Stage.innerHTML = h; paintBest();
     fdHud(); fdBank();
@@ -1315,7 +1435,7 @@
     s.t += dt * 1000;
     for (var i = s.items.length - 1; i >= 0; i--) {
       var it = s.items[i];
-      it.y += it.v * dt;
+      it.y += it.v * dt * (s.slowUntil > s.t ? 0.45 : 1);
       if (it.y > H - 6) { fdLose(it); continue; }
       it.el.style.top = it.y.toFixed(1) + 'px';
     }
@@ -1330,6 +1450,35 @@
     var i = FD.s.items.indexOf(it);
     if (i >= 0) FD.s.items.splice(i, 1);
   }
+  function fdHurt(n) {
+    var s = FD.s;
+    if (!s) return;
+    if (s.shield > 0) {
+      s.shield--;
+      toast('\u{1F6E1}\ufe0f 护盾挡下了，不扣 \u2764\ufe0f');
+      fdHud(); fdBank();
+      return true;
+    }
+    s.hearts -= n;
+    return false;
+  }
+  function fdBuyShield() {
+    var s = FD.s;
+    if (!s || s.over) { toast('先开一局下落消除'); return; }
+    if (s.shield > 0) { toast('护盾已经开着了'); return; }
+    if (!useItem('shield')) return;
+    s.shield++;
+    var b = document.querySelector('[data-act="fdshield"]');
+    if (b) b.textContent = '\u{1F6E1}\ufe0f 护盾 ×' + s.shield;
+    toast('\u{1F6E1}\ufe0f 护盾就位：下一次扣心免疫');
+  }
+  function fdBuySlow() {
+    var s = FD.s;
+    if (!s || s.over) { toast('先开一局下落消除'); return; }
+    if (!useItem('slow')) return;
+    s.slowUntil = s.t + 8000;
+    toast('\u23f8\ufe0f 8 秒内减速到 45%');
+  }
   function fdLose(it) {
     var s = FD.s;
     fdDrop(it);
@@ -1339,11 +1488,11 @@
       toast('✨ 奖励词掉出，不扣 ❤️');
       return;
     }
-    s.hearts -= FD_RULE.miss;
+    var shielded = fdHurt(FD_RULE.miss);
     s.answered++; s.combo = 0; s.hist.push(false);
     fdHud(); fdBank();
     if (s.hearts <= 0) { fdOver(); return; }
-    toast('漏接一个，−' + FD_RULE.miss + ' ❤️');
+    toast(shielded ? '🛡️ 护盾挡下了' : '漏接一个，−' + FD_RULE.miss + ' ❤️');
   }
   function fdPick(u) {
     var s = FD.s;
@@ -1393,14 +1542,14 @@
       toast((it.bonus ? '✨ 奖励词 +' : '✅ 消除 +') + hb + '❤️ 💎+' + gain + (s.combo > 1 ? ' · 连击 ×' + s.combo : ''));
       return;
     }
-    s.hearts -= r.wrong;
+    var shielded2 = fdHurt(r.wrong);
     s.answered++; s.combo = 0; s.hist.push(false);
     markWrong(it.e.w);
     if (s.wrongs.indexOf(it.e.w) < 0) s.wrongs.push(it.e.w);
     fdDrop(it);
     s.sel = null; s.opts = [];
     fdHud(); fdBank();
-    toast('❌ 选错 −' + r.wrong + ' ❤️');
+    toast(shielded2 ? '🛡️ 护盾挡下了' : '❌ 选错 −' + r.wrong + ' ❤️');
     if (s.hearts <= 0) fdOver();
   }
   function fdOver() {
@@ -1540,6 +1689,8 @@
         var b = BEST[k];
         return '<div class="bestrow"><span>' + GNAME[k] + '</span><b>' + (b ? '+' + b.pts : '—') + '</b><i>' + (b ? fmtClock(b.ms) : '') + '</i></div>';
       }).join('') + '</div></div>';
+    h += '<div class="setrow"><div class="lbl">钻石商店<small>\u{1F48E} ' + STATE.score + ' · 用钻石换提示券 / 护盾 / 缓速</small></div>' +
+      '<button class="btn small" data-act="shop">\u{1F6D2} 去商店</button></div>';
     h += '<div class="setrow"><div class="lbl">数据<small>词库 ' + D.length + ' 词 · 分数与错词都存在本机</small></div>' +
       '<button class="btn small warn" data-act="reset">重置进度</button></div>';
     h += '<div class="mini">词库来源：应届毕业生网《大学英语四级基本词汇（3400）》，实际解析出 ' + D.length +
@@ -1591,6 +1742,20 @@
 
     switch (act) {
       case 'settings': openSettings(); break;
+      case 'shop': shopOpen(); break;
+      case 'buy': {
+        var bk = d.k;
+        if (!SHOP[bk]) break;
+        if (!spendGem(SHOP[bk].price)) { toast('\u{1F48E} 不够（要 ' + SHOP[bk].price + '）'); break; }
+        INV[bk] = invN(bk) + 1; saveInv();
+        shopOpen(); toast('已买 ' + SHOP[bk].icon + SHOP[bk].name + ' ×1');
+        break;
+      }
+      case 'wtip': wordleTip(); break;
+      case 'llpeek': llPeek(); break;
+      case 'mpeek': matchPeek(); break;
+      case 'fdshield': fdBuyShield(); break;
+      case 'fdslow': fdBuySlow(); break;
       case 'close': closeSheet(); break;
       case 'tab': go(d.tab); break;
       case 'speak': speak(d.w); break;

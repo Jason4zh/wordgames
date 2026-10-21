@@ -340,3 +340,25 @@ body.light .wsgrid.ws16 .wscell{border-color:#d3deef}
 .fdwrongs{margin-top:2px;padding:10px 12px;border:1px solid #3c2a2c;background:#241a1d;border-radius:12px}
 .fdwrongs .dsub{margin:0 0 2px}
 .seg button{white-space:nowrap}
+
+/* ---- 钻石商店 ---- */
+.chip{cursor:pointer;font:inherit}
+.chip:active{transform:translateY(1px)}
+.shopg{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.shopcard{border:1px solid #26334d;border-radius:12px;padding:9px 10px;background:#101a2d}
+.shoptop{display:flex;align-items:center;gap:8px;font-size:13px}
+.shoptop .shopicon{font-size:19px}
+.shoptop b{flex:1;font-weight:800}
+.shoptop i{font-style:normal;color:#ffd76a;font-weight:800;font-size:12px}
+.shopdesc{font-size:11px;color:#8fa3c6;margin:4px 0 7px;line-height:1.5}
+.shopfoot{display:flex;align-items:center;justify-content:space-between}
+.shopfoot .own{font-size:11px;color:#8fa3c6}
+/* ---- Wordle 揭示行 ---- */
+.wrev{font-size:12px;color:#ffd76a;margin:0 0 8px;text-align:center;line-height:1.6}
+.wrev b{color:var(--mint)}
+/* ---- 找词高亮透视 ---- */
+.wscell.peek{background:#4a3a12;border-color:#ffd76a;color:#ffe9a6;animation:peekPulse .8s ease-in-out infinite}
+@keyframes peekPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+body.light .shopcard{background:#f4f7fd;border-color:#d3dfef}
+body.light .shopdesc,body.light .shopfoot .own{color:#5b6b86}
+body.light .wscell.peek{background:#fff3cf;border-color:#e2ab2d;color:#7a5200}
