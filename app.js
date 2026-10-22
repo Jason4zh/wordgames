@@ -999,7 +999,7 @@
    * ===================================================================== */
   var FD = { s: null };
   var FD_KEYS = ['hearts', 'gain', 'wrong', 'miss', 'vmin', 'vmax', 'gap', 'max', 'opts', 'base', 'bspd', 'bheart', 'bonus'];
-  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 8, vmax: 13, gap: 1.25, max: 4, opts: 4, base: 12, bspd: 3, bheart: 1, bonus: 1 };
+  var FD_DEF = { hearts: 5, gain: 1, wrong: 2, miss: 1, vmin: 32, vmax: 46, gap: 1.25, max: 4, opts: 4, base: 12, bspd: 3, bheart: 1, bonus: 1 };
   var FD_RULE = (function () {
     var save = LS.get('wg:fdr', null), r = {}, i, k, v;
     for (i = 0; i < FD_KEYS.length; i++) { k = FD_KEYS[i]; r[k] = FD_DEF[k]; }
@@ -1009,6 +1009,12 @@
         v = parseFloat(save[k]);
 
         if (isFinite(v)) r[k] = v;
+      }
+      /* 旧版本速度单位是 %/s（个位数），迁移回 px/s */
+      if (r.vmin < 20 && r.vmax < 20) {
+        r.vmin = FD_DEF.vmin;
+        r.vmax = FD_DEF.vmax;
+        try { LS.set('wg:fdr', r); } catch (e) {}
       }
     }
     return r;
@@ -1032,7 +1038,7 @@
   function fdFac(s) {
     var r = FD_RULE;
     var mid = (r.vmin + r.vmax) / 2;
-    var arr = [mid / 10.5, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts, (r.bonus >= 1 ? r.bspd : 3) / 3];
+    var arr = [mid / 39, 1.25 / r.gap, r.max / 4, r.opts / 4, (r.wrong + r.miss) / 3, 5 / r.hearts, (r.bonus >= 1 ? r.bspd : 3) / 3];
     var sum = 0;
     arr.forEach(function (v) { sum += Math.max(0.5, Math.min(2, v)); });
     var f = sum / arr.length;
@@ -1046,7 +1052,7 @@
   function fdRuleText() {
     var r = FD_RULE;
     return '❤️' + r.hearts + ' · 对+' + r.gain + ' · 错−' + r.wrong + ' · 漏−' + r.miss +
-      ' · 速' + r.vmin + '~' + r.vmax + '%/s · ' + r.gap + 's/张 · 同屏' + r.max +
+      ' · 速' + r.vmin + '~' + r.vmax + 'px/s · ' + r.gap + 's/张 · 同屏' + r.max +
       ' · 选项' + r.opts + ' · 分' + r.base + (r.bonus >= 1 ? ' · ✨×' + r.bspd + ' +' + r.bheart + '❤️' : ' · ✨关');
   }
 
@@ -1140,7 +1146,7 @@
     var bonus = r.bonus >= 1 && Math.random() < 0.16;
     var it = {
       u: s.uid++, e: e, type: type, bonus: bonus,
-      x: 3 + Math.random() * 52, y: -12,
+      x: 3 + Math.random() * 52, y: -46,
       v: (lo + Math.random() * (hi - lo)) * (bonus ? r.bspd : 1),
       rot: -18 + Math.random() * 36, el: el
     };
@@ -1149,7 +1155,7 @@
     el.setAttribute('data-u', it.u);
     el.textContent = type === 'en' ? e.w : shortZh(e);
     el.style.left = it.x + '%';
-    el.style.top = it.y + '%';
+    el.style.top = it.y + 'px';
     el.style.transform = 'rotate(' + it.rot.toFixed(1) + 'deg)';
     box.appendChild(el);
     s.items.push(it);
@@ -1166,9 +1172,9 @@
     s.t += dt * 1000;
     for (var i = s.items.length - 1; i >= 0; i--) {
       var it = s.items[i];
-      it.y += it.v * dt;              /* v 的单位是 %/秒，按容器高度自适应 */
-      if (it.y > 100) { fdLose(it); continue; }
-      it.el.style.top = it.y.toFixed(2) + '%';
+      it.y += it.v * dt;              /* v 的单位是 px/秒，按像素下落 */
+      if (it.y > box.clientHeight) { fdLose(it); continue; }
+      it.el.style.top = it.y.toFixed(1) + 'px';
     }
     s.spawnT += dt;
     if (s.spawnT > FD_RULE.gap) { s.spawnT = 0; fdSpawn(); }
@@ -1299,8 +1305,8 @@
     h += row('gain', '答对回心', '1', '颗', '普通词答对回几颗');
     h += row('wrong', '选错扣心', '1', '颗', '选错一次扣几颗');
     h += row('miss', '漏接扣心', '1', '颗', '掉出去一张扣几颗');
-    h += row('vmin', '下落速度下限（慢）', '1', '%/s', '每秒下落多少屏高的百分比，越小越慢');
-    h += row('vmax', '下落速度上限（快）', '1', '%/s', '单位是 %/s，跟屏幕高度无关，换手机速度不变');
+    h += row('vmin', '下落速度下限（慢）', '1', 'px/s', '每秒向下移动的像素数，越小越慢');
+    h += row('vmax', '下落速度上限（快）', '1', 'px/s', '每秒向下移动的像素数，越大越快');
     h += row('gap', '生成间隔', '0.05', '秒', '每隔几秒掉一张');
     h += row('max', '同屏上限', '1', '张', '屏幕上最多同时几张');
     h += row('opts', '选项个数', '1', '个', '每题给几个选项');
@@ -1527,7 +1533,8 @@
   function go(id) {
     fdStop();
     STATE.game = id;
-    document.body.classList.toggle('fdmode', id === 'fd');   /* 下落页全屏 */
+    /* 全屏模式已取消，清掉历史可能残留的类名 */
+    document.body.classList.remove('fdmode');
     renderTabs();
     if (id === 'wordle') wordleNew();
     else if (id === 'fill') fillNew();

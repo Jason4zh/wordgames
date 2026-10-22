@@ -372,16 +372,3 @@ body.light .srow small{color:#6b7b95}
 body.light .srow i{color:#8090a8}
 body.light .scount,body.light .shint{color:#6b7b95}
 body.light .shint b{color:#3b6ef0}
-/* ---------- 下落消除 · 全屏模式（body.fdmode） ---------- */
-body.fdmode{height:100vh;min-height:0;overflow:hidden}
-body.fdmode .top{padding:6px 12px 4px}
-body.fdmode #stage{flex:1;min-height:0;padding:0 6px 4px;display:flex;flex-direction:column;overflow:hidden}
-body.fdmode .panel{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 8px 6px;border-radius:14px}
-body.fdmode .panel>.mini{display:none}
-body.fdmode .rowbar{margin-bottom:4px}
-body.fdmode .fdbox{flex:1;height:auto;min-height:0;margin:4px 0 6px}
-body.fdmode .fdstat{margin:0 0 4px}
-body.fdmode .fdrule{margin:0 0 4px}
-body.fdmode .fdbank{min-height:0;max-height:30vh;overflow-y:auto;flex:0 0 auto}
-body.fdmode .fdbank .fdopt{padding:8px 6px;font-size:12px}
-body.fdmode .fdtip{font-size:11px}
