@@ -100,6 +100,10 @@ b,strong{font-weight:700}
 .mcfr{transform:rotateY(180deg);background:#20304f;color:var(--txt)}
 .mcard.en .mcfr{font-weight:800;font-size:12.5px;letter-spacing:.2px}
 .mcard.done .mcfr{background:#12301f;border-color:#2f8f66;color:var(--mint);opacity:.9}
+/* 配错翻回：翻面有过渡，同时轻微抖动 + 红边提示 */
+.mcard.miss{animation:mcardShake .46s ease}
+.mcard.miss .mcfr{border-color:#e2576f;box-shadow:0 0 0 2px rgba(226,87,111,.28);color:#ffd7de}
+@keyframes mcardShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}48%{transform:translateX(4px)}74%{transform:translateX(-2px)}}
 
 /* ---------- 单词找词（字母棋盘） ---------- */
 .wsgrid{display:grid;gap:4px;margin-top:6px}
@@ -145,6 +149,8 @@ b,strong{font-weight:700}
 .wc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .wc-word{font-size:26px;font-weight:800;letter-spacing:.3px}
 .wc-phon{font-size:12px;color:var(--dim);margin-top:2px}
+.wc-pic{margin:10px 0 2px;text-align:center}
+.wc-pic img{max-width:100%;max-height:190px;border-radius:12px;border:1px solid #26304a;background:#0d1424}
 .wc-gloss{font-size:16px;line-height:1.65;margin:10px 0 4px}
 .wc-gloss .n{color:var(--dim);font-size:12px;margin-right:5px}
 .sec{margin-top:14px;padding-top:12px;border-top:1px dashed #24314c}

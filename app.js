@@ -34,7 +34,7 @@
       w: r[0], p: p.join('&'), z: z.join('；'), en: en.join('; '),
       uk: r[3] || '', us: r[4] || '', trs: trs,
       syn: r[6] || [], ant: r[7] || [], rel: r[8] || [],
-      phr: r[9] || [], sent: r[10] || [], mem: r[11] || '',
+      phr: r[9] || [], sent: r[10] || [], mem: r[11] || '', img: r[12] || '',
       book: bid, bookName: bname || bankNameOf(bid)
     };
   }
@@ -267,6 +267,12 @@
         (e.uk ? '英 /' + esc(e.uk) + '/' : '') +
         (e.uk && e.us ? '　' : '') +
         (e.us ? '美 /' + esc(e.us) + '/' : '') + '</div>';
+    }
+
+    /* ---- 配图：只有图片记忆版词库带图，没有图或加载失败就整块不显示 ---- */
+    if (e.img) {
+      h += '<div class="wc-pic"><img src="' + esc(e.img) + '" alt="' + esc(e.w) +
+        '" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.style.display=\'none\'"></div>';
     }
 
     h += '<div class="wc-gloss">' + (senses.length ? senses.map(function (s, i) {
@@ -971,22 +977,35 @@
     c.open = true;
     if (el) el.classList.add('open');   /* 先加类触发翻转动画，不立即重绘 */
     if (s.first < 0) { s.first = i; return; }
-    var a = s.cards[s.first];
+    var fi = s.first, aI = s.cards[fi];
     s.lock = true;
     s.moves++;
-    var ok = (a.k === c.k);
-    setTimeout(function () {
-      if (ok) {
-        a.done = true; c.done = true;
+    var ok = (aI.k === c.k);
+    if (ok) {
+      setTimeout(function () {
+        aI.done = true; c.done = true;
         s.matched += 2; s.first = -1; s.lock = false;
         addScore(15); markLearned(c.e.w); markRight(c.e.w);
         if (s.matched === s.total) { s.done = true; addScore(60); roundEnd(); }
         matchRender();
-        return;
-      }
-      a.open = false; c.open = false; s.first = -1; s.lock = false;
-      matchRender();
-    }, ok ? 430 : 760);
+      }, 430);
+      return;
+    }
+    /* 配错：先停留让人看清，再把两张牌原地「翻回去」（CSS 过渡 + 抖动），翻完才重绘 */
+    setTimeout(function () {
+      var ea = document.querySelector('.mcard[data-i="' + fi + '"]');
+      var eb = document.querySelector('.mcard[data-i="' + i + '"]');
+      [ea, eb].forEach(function (x) {
+        if (!x) return;
+        x.classList.remove('open');
+        x.classList.add('miss');
+      });
+      aI.open = false; c.open = false; s.first = -1;
+      setTimeout(function () {
+        s.lock = false;
+        matchRender();
+      }, 460);
+    }, 640);
   }
 
     /* =====================================================================
